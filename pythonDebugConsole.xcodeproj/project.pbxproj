@@ -1,0 +1,150 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 42;
+	objects = {
+
+/* Begin PBXAggregateTarget section */
+		1A9CF5930CFE36C0006901BC /* pythonDebugConsole */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 1A9CF59B0CFE36CC006901BC /* Build configuration list for PBXAggregateTarget "pythonDebugConsole" */;
+			buildPhases = (
+				1A9CF5920CFE36C0006901BC /* ShellScript */,
+			);
+			dependencies = (
+			);
+			name = pythonDebugConsole;
+			productName = pythonDebugConsole;
+		};
+/* End PBXAggregateTarget section */
+
+/* Begin PBXFileReference section */
+		1A1A0CAE0D00178400D7BA80 /* OODebugTCPConsoleProtocol.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = OODebugTCPConsoleProtocol.h; path = ../../src/Core/Debug/OODebugTCPConsoleProtocol.h; sourceTree = SOURCE_ROOT; };
+		1A9CF5480CFE2B88006901BC /* pySimpleConsole.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = pySimpleConsole.py; sourceTree = "<group>"; };
+		1A9CF5540CFE2E92006901BC /* __init__.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = __init__.py; sourceTree = "<group>"; };
+		1A9CF5880CFE2FB4006901BC /* _protocol.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = _protocol.py; sourceTree = "<group>"; };
+		1A9CF59C0CFE3940006901BC /* OoliteDebugConsoleProtocol.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = OoliteDebugConsoleProtocol.py; sourceTree = "<group>"; };
+		1A9CF59F0CFE398E006901BC /* PropertyListPacketProtocol.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = PropertyListPacketProtocol.py; sourceTree = "<group>"; };
+		1ADA9A250D001F3D00FE1202 /* twisted */ = {isa = PBXFileReference; lastKnownFileType = folder; name = twisted; path = /System/Library/Frameworks/Python.framework/Versions/2.5/Extras/lib/python/twisted; sourceTree = "<absolute>"; };
+		1AFB92DE0D26D981005E4E3D /* OoliteDebugCLIProtocol.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = OoliteDebugCLIProtocol.py; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1A9CF53E0CFE2B6F006901BC = {
+			isa = PBXGroup;
+			children = (
+				1A9CF5480CFE2B88006901BC /* pySimpleConsole.py */,
+				1AFB92DE0D26D981005E4E3D /* OoliteDebugCLIProtocol.py */,
+				1A9CF5530CFE2E92006901BC /* ooliteConsoleServer */,
+				1A1A0CAE0D00178400D7BA80 /* OODebugTCPConsoleProtocol.h */,
+				1ADA9A250D001F3D00FE1202 /* twisted */,
+			);
+			sourceTree = "<group>";
+		};
+		1A9CF5530CFE2E92006901BC /* ooliteConsoleServer */ = {
+			isa = PBXGroup;
+			children = (
+				1A9CF5540CFE2E92006901BC /* __init__.py */,
+				1A9CF5880CFE2FB4006901BC /* _protocol.py */,
+				1A9CF59F0CFE398E006901BC /* PropertyListPacketProtocol.py */,
+				1A9CF59C0CFE3940006901BC /* OoliteDebugConsoleProtocol.py */,
+			);
+			path = ooliteConsoleServer;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		1A9CF5400CFE2B6F006901BC /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 1A9CF5430CFE2B6F006901BC /* Build configuration list for PBXProject "pythonDebugConsole" */;
+			compatibilityVersion = "Xcode 2.4";
+			hasScannedForEncodings = 0;
+			mainGroup = 1A9CF53E0CFE2B6F006901BC;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1A9CF5930CFE36C0006901BC /* pythonDebugConsole */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		1A9CF5920CFE36C0006901BC /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here\nexit 0";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1A9CF5410CFE2B6F006901BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = Debug;
+		};
+		1A9CF5420CFE2B6F006901BC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+			};
+			name = Release;
+		};
+		1A9CF5940CFE36C0006901BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				PRODUCT_NAME = pythonDebugConsole;
+			};
+			name = Debug;
+		};
+		1A9CF5950CFE36C0006901BC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				PRODUCT_NAME = pythonDebugConsole;
+				ZERO_LINK = NO;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A9CF5430CFE2B6F006901BC /* Build configuration list for PBXProject "pythonDebugConsole" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A9CF5410CFE2B6F006901BC /* Debug */,
+				1A9CF5420CFE2B6F006901BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A9CF59B0CFE36CC006901BC /* Build configuration list for PBXAggregateTarget "pythonDebugConsole" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A9CF5940CFE36C0006901BC /* Debug */,
+				1A9CF5950CFE36C0006901BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1A9CF5400CFE2B6F006901BC /* Project object */;
+}
