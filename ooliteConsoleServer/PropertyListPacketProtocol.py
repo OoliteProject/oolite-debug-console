@@ -8,7 +8,24 @@
 
 
 from twisted.internet.protocol import Protocol
-from plistlib import readPlistFromString, writePlistToString
+from plistlib import readPlist, writePlist
+from cStringIO import StringIO
+
+
+# These are part of plistlib.py on Mac OS X, but not in the files easily
+# available on the web.
+def readPlistFromString(data):
+    """Read a plist data from a string. Return the root object.
+    """
+    return readPlist(StringIO(data))
+
+
+def writePlistToString(rootObject):
+    """Return 'rootObject' as a plist-formatted string.
+    """
+    f = StringIO()
+    writePlist(rootObject, f)
+    return f.getvalue()
 
 
 class PropertyListPacketProtocol(Protocol):
