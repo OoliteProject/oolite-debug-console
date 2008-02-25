@@ -132,9 +132,12 @@ class Window:
 			self.tried=self.tried+1
 
 	def mPrint (self,str):
-		if str[:len(self.CMD)] ==self.CMD:
-			str=string.strip(str[len(self.CMD):])
-		self.Print(str)
+		if not hasattr(self,'CMD'):
+			self.Print(str)
+		else:
+			if str[:len(self.CMD)] == self.CMD:
+				str=string.strip(str[len(self.CMD):])
+			self.Print(str)
 
 	def Print(self,str):
 		self.BodyText.config(state=NORMAL)
