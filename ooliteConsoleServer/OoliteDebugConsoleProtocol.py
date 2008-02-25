@@ -88,20 +88,17 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 				packet[P.removedConfigurationKeysKey] = [key]
 			self.sendPlistPacket(packet)
 	
-	
 	# Internals beyod this point
 	def connectionMade(self):
-		print "Connection established."
 		self.delegate = self.factory.delegateClass(self)
 	
 	
 	def connectionLost(self, reason):
 		if self.__open:
 			self.__open = False
-			self.delegate.connectionClosed("Connection unexpectedly closed.")
+			self.delegate.connectionClosed("Connection closed.")
 		elif not self.__closed:
 			self.__closed = True
-			print "Connection closed."
 	
 	
 	def plistPacketReceived(self, packet):

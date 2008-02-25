@@ -13,7 +13,7 @@ import sys
 
 
 class OoliteDebugCLIProtocol(basic.LineReceiver):
-	delimiter = "\n"	# Does this need to be "\r\n" for Windows?
+	delimiter = "\n"
 	inputReceiver = None
 	
 	
