@@ -27,7 +27,7 @@ from Tkinter import *
 import tkFileDialog,string
 
 class SimpleConsoleDelegate:
-	__active = False
+	__active = Active = False
 	
 	def __init__(self, protocol):
 		self.protocol = protocol
@@ -43,7 +43,7 @@ class SimpleConsoleDelegate:
 	def connectionOpened(self, ooliteVersionString):
 		app.Print ("Opened connection with Oolite version "+ ooliteVersionString)
 		self.protocol.factory.activeCount += 1
-		self.__active = True
+		self.__active = self.Active = True
 		cliHandler.inputReceiver = self
 	
 	def connectionClosed(self, message):
@@ -53,7 +53,7 @@ class SimpleConsoleDelegate:
 			app.Print ("Connection closed with no message.")
 		if self.__active:
 			self.protocol.factory.activeCount -= 1
-			self.__active = False
+			self.__active = self.Active = False
 	
 	def writeToConsole(self, message, colorKey, emphasisRanges):
 		#assuming the first 2 lines are the command echo
@@ -90,7 +90,7 @@ class Window:
 
 		self.BodyText = Text(frame,bg="#abb",bd=0,font=('arial', 10, 'normal'),wrap=WORD,yscrollcommand=self.yScroll.set)
 		self.BodyText.place(x=0, y=0, width=490,height=320)
-		self.BodyText.tag_config('input',font=('arial', 10, 'bold'),background='#eee')
+		self.BodyText.tag_config('input',font=('arial', 10, 'bold'),background='#e2e2e2',bgstipple='gray25')
 		self.yScroll.config(command=self.BodyText.yview)
 		self.yScroll.pack(side=RIGHT, fill=Y)
 		self.BodyText.pack(side=LEFT, fill=BOTH, expand=1)
@@ -115,7 +115,8 @@ class Window:
 	def cRun(self):
 		if '/quit' == self.cline.get( '1.0', END)[:5]:
 			reactor.stop()
-		if hasattr (cliHandler.inputReceiver,'receiveUserInput'):
+		if hasattr (cliHandler.inputReceiver,'receiveUserInput') and cliHandler.inputReceiver.Active:
+			self.tried = 0
 			self.BodyText.config(state=NORMAL)
 			self.CMD=self.cline.get( '1.0', END)
 			cliHandler.inputReceiver.receiveUserInput (self.CMD)
@@ -159,10 +160,8 @@ root.resizable(0,0)
 root.protocol("WM_DELETE_WINDOW", reactor.stop)
 app = Window(root)
 
-app.Print ("Python Oolite debug console")
 app.Print ("Type /quit to quit.")
 app.Print ("Waiting for connection...")
-
 
 # Set up console server protocol
 factory = Factory()

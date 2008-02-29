@@ -96,10 +96,11 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	def connectionLost(self, reason):
 		if self.__open:
 			self.__open = False
-			self.delegate.connectionClosed("Connection closed.")
+			self.delegate.connectionClosed(None)
+			return
 		elif not self.__closed:
 			self.__closed = True
-	
+		self.delegate.connectionClosed(reason)
 	
 	def plistPacketReceived(self, packet):
 		# Dispatch based on packet type.
