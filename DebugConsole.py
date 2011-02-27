@@ -6,7 +6,7 @@
 #  Created by Jens Ayton on 2007-11-29.
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
-#  GUI I/O  & Windows hackery by Kaks ( 2008-02-25)
+#  GUI I/O  & Windows hackery by Kaks (2008-02-25)
 #
 
 """
@@ -14,7 +14,7 @@ A gui implementation of the Oolite JavaScript debug console interface.
 Tested on Windows, should be Linux compatible.
 """
 
-__author__	= "Jens Ayton <jens@ayton.se>"
+__author__	= "Jens Ayton <jens@ayton.se>, Kaks"
 __version__	= "1.0"
 
 

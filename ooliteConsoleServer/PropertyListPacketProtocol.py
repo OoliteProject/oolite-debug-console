@@ -32,7 +32,7 @@ class PropertyListPacketProtocol(Protocol):
 	"""
 	Class handling a property list packet stream.
 	
-	Oolite's debug console is based on property list. Each property list is	a
+	Oolite's debug console is based on property lists. Each property list is a
 	self-contained entity, or packet. Since TCP is stream-oriented, it is
 	necessary to have a packet framing protocol on top of it.
 	
