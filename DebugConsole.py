@@ -6,25 +6,26 @@
 #  Created by Jens Ayton on 2007-11-29.
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
-#  GUI I/O  & Windows hackery by Kaks (2008-02-25)
+
+#  GUI I/O stuff (c) 2008-2011 Kaks. CC-by-NC-SA 3
 #
 
 """
 A gui implementation of the Oolite JavaScript debug console interface.
-Tested on Windows, should be Linux compatible.
+
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks"
-__version__	= "1.0"
+__version__	= "1.2"
 
 
 from ooliteConsoleServer import *
 from twisted.internet.protocol import Factory
-from twisted.internet import stdio, reactor,tksupport
+from twisted.internet import stdio, reactor, tksupport
 from OoliteDebugCLIProtocol import OoliteDebugCLIProtocol
 
 from Tkinter import *
-import tkFileDialog,string
+import string, os
 
 class SimpleConsoleDelegate:
 	__active = Active = False
@@ -82,55 +83,76 @@ def getInputReceiver():
 class Window:
 	def __init__(self,master):
 		self.tried=0
-		frame = Frame(master)
-		frame.place(width=500, height=320)
 
-		self.yScroll = Scrollbar ( frame, orient=VERTICAL )
-		self.yScroll.place ( x=0,y=488, )
 
-		self.BodyText = Text(frame,bg="#abb",bd=0,font=('arial', 10, 'normal'),wrap=WORD,yscrollcommand=self.yScroll.set)
-		self.BodyText.place(x=0, y=0, width=490,height=320)
-		self.BodyText.tag_config('input',font=('arial', 10, 'bold'),background='#e2e2e2',bgstipple='gray25')
+
+
+		self.frame = Frame(master)
+		self.frame.place(relwidth=1, relheight=1, height=-60)
+
+		self.yScroll = Scrollbar (self.frame, orient=VERTICAL, width=16)
+		self.yScroll.pack(side=LEFT, anchor=E, fill=Y, expand=YES)
+
+		self.BodyText = Text(self.frame, bg="#cacdcd", bd=0, font=('arial', 10, 'normal'), wrap=WORD,yscrollcommand=self.yScroll.set)
+
+		self.BodyText.tag_config('input', font=('arial', 10, 'bold'), background='#e0e2e2')
+		self.BodyText.place(relwidth=1, relheight=1, width=-16)
+
 		self.yScroll.config(command=self.BodyText.yview)
-		self.yScroll.pack(side=RIGHT, fill=Y)
-		self.BodyText.pack(side=LEFT, fill=BOTH, expand=1)
 
-		self.lineContainer = Frame(master,bg="#ddd")
-		self.lineContainer.place(x=0,y=320,width=500,height=60)
 
-		self.cline = Text(self.lineContainer,bd=0, bg="#fff",font=('arial', 10, 'normal'))
-		self.cline.place(x=2, y=0, width=448,height=60)
-		self.cline.bind('<Return>', self.cRet)
-		self.btnRun = Button(self.lineContainer, text="Run", command=self.cRun)
-		self.btnRun.place(x=450,y=0, height=40, width=50)
 
-		self.btnExit = Button(self.lineContainer, text="Clear", command=self.cClear)
-		self.btnExit.place(x=450,y=40, height=20, width=50)
-		self.cline.focus_set()
+		self.cliBox = Frame(master)
+		self.cliBox.place(rely=1,anchor=SW, relwidth=1, height=60)
+
+		self.cli = Text(self.cliBox, bd=2, relief=FLAT, bg="#fff",font=('arial', 10, 'normal'))
+		self.cli.place(relwidth=1,relheight=1,width=-50)
+		self.cli.bind('<Return>', self.cRet)
+		self.cli.bind("<Up>", self.cHistoryBack)
+		self.cli.bind("<Down>", self.cHistoryForward)
+
+
+		self.cli.focus_set()
+		
+		self.btnRun = Button(self.cliBox, text=" Run", bg='#ccc', command=self.cRun)
+		self.btnRun.place(anchor=NE, relx=1, height=38, width=50)
+		self.btnExit = Button(self.cliBox, bg='#ddd', text=" Clear", command=self.cClear)
+		self.btnExit.place(anchor=NE, relx=1, y=38, height=22, width=50)
+
+		# Command history
+
+		self.history = []
+		self.historyIdx = None
+		self.current = ""
 
 	def cRet(self,event):
 		self.cRun()
 		return 'break'
 
 	def cRun(self):
-		if '/quit' == self.cline.get( '1.0', END)[:5]:
+		if '/quit' == self.cli.get( '1.0', END)[:5]:
 			reactor.stop()
-		if hasattr (cliHandler.inputReceiver,'receiveUserInput') and cliHandler.inputReceiver.Active:
-			self.tried = 0
-			self.BodyText.config(state=NORMAL)
-			self.CMD=self.cline.get( '1.0', END)
-			cliHandler.inputReceiver.receiveUserInput (self.CMD)
-			self.CMD='> '+self.CMD
-			self.BodyText.insert(END,self.CMD,'input')
-			self.cline.delete( '1.0', END) 
-			self.BodyText.config(state=DISABLED)
-			self.BodyText.see(END)
 		else:
-			if self.tried == 0:
-				self.Print("\nPlease (re)start Oolite in order to connect.\nYou can only use the console once you're connected.")
-			elif self.tried == 1:
-				self.Print(' * Please connect to Oolite first! * ')
-			self.tried=self.tried+1
+			self.historyIdx = None
+			self.CMD = self.cli.get( '1.0', END)
+			idx = len(self.history) - 1;
+			if string.strip(self.CMD) and (idx < 0 or self.CMD != self.history[idx]):
+				self.history.append(self.CMD)		
+			if hasattr (cliHandler.inputReceiver,'receiveUserInput') and cliHandler.inputReceiver.Active:
+				self.tried = 0
+				self.BodyText.config(state=NORMAL)
+				cliHandler.inputReceiver.receiveUserInput (self.CMD)
+				self.CMD='> '+self.CMD
+				self.BodyText.insert(END,self.CMD,'input')
+				self.cli.delete( '1.0', END) 
+				self.BodyText.config(state=DISABLED)
+				self.BodyText.see(END)
+			else:
+				if self.tried == 0:
+					self.Print("\nPlease (re)start Oolite in order to connect.\nYou can only use the console after you're connected.")
+				elif self.tried == 1:
+					self.Print(' * Please connect to Oolite first! * ')
+				self.tried=self.tried+1
 
 	def mPrint (self,str):
 		if not hasattr(self,'CMD'):
@@ -147,19 +169,59 @@ class Window:
 		self.BodyText.see(END)
 
 	def cClear(self):
+		self.tried = 0
 		self.BodyText.config(state=NORMAL)
 		self.BodyText.delete('1.0', END)
 		self.BodyText.config(state=DISABLED)
 
+	def cHistoryBack(self, event):
+		if self.history:
+			if self.historyIdx is None:
+				self.current = self.cli.get( '1.0', END)
+				self.historyIdx = len(self.history) - 1
+			elif self.historyIdx > 0:
+				self.historyIdx -= 1
+			self.cHistoryShow()
+		return 'break'
 
-		
+	def cHistoryForward(self, event):
+		if self.history and self.historyIdx is not None:
+			self.historyIdx += 1
+			if self.historyIdx < len(self.history):
+				self.cHistoryShow()
+			else:
+				self.historyIdx = None
+				self.cHistoryShow(self.current)
+		return 'break'
+
+	def cHistoryShow(self, cmd=None):
+		if cmd is None:
+			cmd = self.history[self.historyIdx]
+		self.cli.delete('1.0', END)
+		self.cli.insert(END,cmd.rstrip())
+
+
 root = Tk()
-root.title("Oolite - Javascript Debug Console")
-root.geometry("500x380")
-root.resizable(0,0)
-root.protocol("WM_DELETE_WINDOW", reactor.stop)
 app = Window(root)
+root.minsize(320, 300)
 
+try:
+#	windows compiled runtime (pyInstall)
+	root.iconbitmap(os.path.join(os.environ['_MEIPASS2'], "OoJSC.ico"))
+except Exception:
+	try: 
+# 	normal windows runtime
+		root.iconbitmap("OoJSC.ico")
+	except Exception:
+#	other runtimes, don't use the tk icon!
+		root.iconbitmap('@block.xbm')
+root.title("Oolite - Javascript Debug Console")
+
+root.resizable(YES, YES)
+root.protocol("WM_DELETE_WINDOW", reactor.stop)
+
+
+app.Print ("Use Up and Down arrows to scroll through the command history.")
 app.Print ("Type /quit to quit.")
 app.Print ("Waiting for connection...")
 
