@@ -6,7 +6,7 @@
 #  Created by Jens Ayton on 2007-11-29.
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
-#  GUI I/O stuff (c) 2008-2011 Kaks. CC-by-NC-SA 3
+#  GUI I/O stuff (c) 2008-2012 Kaks. CC-by-NC-SA 3
 #
 
 """
@@ -14,7 +14,7 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks"
-__version__	= "1.3"
+__version__	= "1.4"
 
 
 from ooliteConsoleServer import *
@@ -25,6 +25,10 @@ from Tkinter import *
 
 import string, os, ConfigParser
 
+
+CFGFILE = 'DebugConsole.cfg'
+# if we're using the compiled version, it's OoDebugConsole.cfg rather than DebugConsole.cfg
+if hasattr (sys,'frozen'): CFGFILE = 'Oo' + CFGFILE
 
 class SimpleConsoleDelegate:
 	__active = Active = False
@@ -198,19 +202,20 @@ class Window:
 		config = ConfigParser.RawConfigParser()
 		config.optionxform = str
 		try:
-			fp = open('OoDebugConsole.cfg')
+			fp = open(CFGFILE)
 			config.readfp(fp)
 			saveConfig = config.getboolean('Settings','SaveConfigOnExit')
 			fp.close()
 		except Exception: 
 			pass
+		
 		if saveConfig:
 			try:
 				if not config.has_section('Settings'):
 					config.add_section('Settings')
 				config.set('Settings', 'SaveConfigOnExit', 'Yes')
 				config.set('Settings', 'Geometry', root.geometry())
-				cfg = open('OoDebugConsole.cfg', 'w')
+				cfg = open(CFGFILE, 'w')
 				config.write(cfg)
 				cfg.close()
 			except Exception:
@@ -227,13 +232,15 @@ root.title("Oolite - Javascript Debug Console")
 root.protocol("WM_DELETE_WINDOW", app.cExit)
 
 
-# Set up initial window size & position
+# Load initial settings
+consolePort = None
 try:
 	config = ConfigParser.RawConfigParser()
-	fp = open('OoDebugConsole.cfg')
+	fp = open(CFGFILE)
 	config.readfp(fp)
 	fp.close()
 	settings = config.get('Settings','Geometry')
+	consolePort = config.get('Settings','Port')
 
 except Exception: 
 	pass
@@ -259,10 +266,21 @@ except Exception:
 		except Exception:
 			pass
 
-
-app.Print ("Use Up and Down arrows to scroll through the command history.")
-app.Print ("Type /quit to quit.")
-app.Print ("Waiting for connection...")
+# Set up the console's port using the Port setting inside the .cfg file.
+# All dynamic, private, or ephemeral ports 'should' be between 49152-65535. However, the default port is 8563.
+connectPort = defaultOoliteConsolePort
+if consolePort is not None:
+	try:
+		consolePort = int(consolePort)
+	except:
+		pass
+	if consolePort > 1 and consolePort < 65536:
+		connectPort = consolePort
+		app.Print ("Listening on port " + str(connectPort) +".")
+		root.title("Oolite - Javascript Debug Console:" + str(connectPort))
+	else:
+		app.Print ("Wrong port specification. Using default port (" + str(connectPort) +").")
+			
 
 # Set up console server protocol
 factory = Factory()
@@ -277,5 +295,36 @@ stdio.StandardIO(cliHandler)
 
 # Install the Reactor support
 tksupport.install(root)
-app.listener=reactor.listenTCP(defaultOoliteConsolePort, factory)
+
+try:
+	app.listener=reactor.listenTCP(connectPort, factory)
+	app.Print ("Use Up and Down arrows to scroll through the command history.")
+	app.Print ("Type /quit to quit.")
+	app.Print ("Waiting for connection...")
+except Exception, e:
+	oops = str(e)
+#	oops = "\nAnother process is already listening on "
+#	oops += "\nthe default port." if (connectPort == defaultOoliteConsolePort) else "port " + str(connectPort) +"."
+	oops += "\n\nThis debug console will close now."
+	root.minsize(1, 1)
+	root.resizable(NO, NO)
+	root.geometry("320x166")
+	root.protocol("WM_DELETE_WINDOW", reactor.stop)
+	app.yScroll.pack_forget()
+	app.btnOK = Button(app.cliBox, text="OK", bg='#eee', font=('arial', 17, 'bold'), command=reactor.stop)
+	app.btnOK.place(relwidth=1,relheight=1)
+
+	txt = app.BodyText
+	txt.place(width=0)
+	txt.configure(bg="#fffdfd")
+	txt.config(state=NORMAL)
+	txt.delete('1.0', END)
+	txt.tag_configure('header', justify=CENTER, font=('arial', 11, 'bold'), foreground='#600')
+	txt.tag_configure('center', justify=CENTER)
+	txt.insert(END,'\nInitialisation Error\n\n','header')
+	txt.insert(END,oops,'center')
+	root.geometry("320x" + str(int((float(txt.index(END))-5)*16 + 166)))
+	txt.config(state=DISABLED)
+
+# Wait for user input.
 reactor.run()
