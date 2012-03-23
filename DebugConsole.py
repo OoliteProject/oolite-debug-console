@@ -52,7 +52,7 @@ class SimpleConsoleDelegate:
 	
 	def connectionClosed(self, message):
 		if message != None and len(message) > 0:
-			app.Print ("Connection closed with message: "+ message)
+			app.Print ('Connection closed:"' + message +'"')
 		else:
 			app.Print ("Connection closed with no message.")
 		if self.__active:
@@ -61,7 +61,7 @@ class SimpleConsoleDelegate:
 	
 	def writeToConsole(self, message, colorKey, emphasisRanges):
 		#assuming the first 2 lines are the command echo
-		app.mPrint(message)
+		app.colPrint(message, colorKey)
 	
 	def clearConsole(self):
 		pass
@@ -92,9 +92,9 @@ class Window:
 		self.yScroll = Scrollbar (self.frame, orient=VERTICAL, width=16)
 		self.yScroll.pack(side=LEFT, anchor=E, fill=Y, expand=YES)
 		
-		self.BodyText = Text(self.frame, bg="#cacdcd", bd=0, font=('arial', 10, 'normal'), wrap=WORD,yscrollcommand=self.yScroll.set)
+		self.BodyText = Text(self.frame, bg="#dadddd", bd=0, font=('arial', 10, 'normal'), wrap=WORD,yscrollcommand=self.yScroll.set)
 		
-		self.BodyText.tag_config('input', font=('arial', 10, 'bold'), background='#e0e2e2')
+		self.BodyText.tag_config('dbg')
 		self.BodyText.place(relwidth=1, relheight=1, width=-16)
 		
 		self.yScroll.config(command=self.BodyText.yview)
@@ -136,34 +136,39 @@ class Window:
 				self.history.append(self.CMD)		
 			if hasattr (cliHandler.inputReceiver,'receiveUserInput') and cliHandler.inputReceiver.Active:
 				self.tried = 0
-				self.BodyText.config(state=NORMAL)
-				
-				cliHandler.inputReceiver.receiveUserInput (self.CMD)
-				self.CMD='> '+self.CMD
-				self.BodyText.insert(END,self.CMD,'input')
+				cliHandler.inputReceiver.receiveUserInput(self.CMD)
 				self.cli.delete( '1.0', END) 
-				self.BodyText.config(state=DISABLED)
-				self.BodyText.see(END)
 			else:
 				if self.tried == 0:
 					self.Print("\nPlease (re)start Oolite in order to connect.\nYou can only use the console after you're connected.")
 				elif self.tried == 1:
 					self.Print(' * Please connect to Oolite first! * ')
 				self.tried=self.tried+1
+		
+	def Print(self,s):
+		self.colPrint(s,'dbg')
 	
-	def mPrint (self,str):
-		if not hasattr(self,'CMD'):
-			self.Print(str)
-		else:
-			if str[:len(self.CMD)] == self.CMD:
-				str=string.strip(str[len(self.CMD):])
-			self.Print(str)
-	
-	def Print(self,str):
-		self.BodyText.config(state=NORMAL)
-		self.BodyText.insert(END,str+'\n')
-		self.BodyText.config(state=DISABLED)
-		self.BodyText.see(END)
+	def colPrint(self,s,colkey):
+		colkey = colkey.lower()
+		isDbg = True
+		if colkey != 'dbg':
+			isDbg = False
+			s = s.strip(' \t\n\r')
+			if len(s) >0: s = s + '\n'
+		
+		txt = self.BodyText
+		try:
+			if not isDbg: tmp = COLORS[colkey]
+		except Exception:
+			if (DEBUGCOLS): s = '['+colkey+'] ' + s
+			colkey = 'dbg'
+			isDbg = True
+		
+		txt.config(state=NORMAL)
+		txt.insert(END,s,colkey)
+		if len(s) < 1 or isDbg: txt.insert(END,'\n','dbg')
+		txt.config(state=DISABLED)
+		txt.see(END)
 	
 	def cClear(self):
 		self.tried = 0
@@ -234,13 +239,24 @@ root.protocol("WM_DELETE_WINDOW", app.cExit)
 
 # Load initial settings
 consolePort = None
+DEBUGCOLS = False
+initConfig = ConfigParser.RawConfigParser()
 try:
-	config = ConfigParser.RawConfigParser()
 	fp = open(CFGFILE)
-	config.readfp(fp)
+	initConfig.readfp(fp)
 	fp.close()
-	settings = config.get('Settings','Geometry')
-	consolePort = config.get('Settings','Port')
+	try:
+		settings = initConfig.get('Settings','Geometry')
+	except:
+		pass
+	try:
+		consolePort = initConfig.get('Settings','Port')
+	except:
+		pass
+	try:
+		DEBUGCOLS = initConfig.getboolean('Settings','DebugCols')
+	except:
+		pass
 
 except Exception: 
 	pass
@@ -279,8 +295,40 @@ if consolePort is not None:
 		app.Print ("Listening on port " + str(connectPort) +".")
 		root.title("Oolite - Javascript Debug Console:" + str(connectPort))
 	else:
-		app.Print ("Wrong port specification. Using default port (" + str(connectPort) +").")
+		app.Print ("Invalid port specified. Using default port (" + str(connectPort) +").")
+
+# Set up Colors:
+COLORS = {'general':'#000','command':'#006','warning':'#660','error':'#800','exception':'#808'}
+
+COLORS['command-result'] = '#050'
+COLORS['command-error'] = '#600'
+
+COLORS['macro-expansion'] = '#999'
+COLORS['macro-warning'] = '#aa5'
+COLORS['macro-list'] = '#5a5'
+
+COLORS['unknown-macro'] = '#aa5'
+COLORS['macro-error'] = '#a55'
+COLORS['macro-info'] = '#5a5'
+COLORS['command-exception'] = '#606'
+
+txt = app.BodyText
+
+if initConfig.has_section('Colors'):
+	cols = initConfig.options('Colors')
+	for col in cols:
+		try:
+			tmp = Config.get('Colors', col)
+			txt.tag_configure('tmp', foreground=tmp)
+			COLORS[col.lower()] = tmp
+		except:
+			pass
 			
+for col in COLORS:
+	txt.tag_configure(col, foreground=COLORS[col])
+	if (col == 'command'): txt.tag_configure(col, font=('arial',9,'bold'), background='#e8ebeb')
+	
+#app.Print(COLORS)
 
 # Set up console server protocol
 factory = Factory()
@@ -314,7 +362,6 @@ except Exception, e:
 	app.btnOK = Button(app.cliBox, text="OK", bg='#eee', font=('arial', 17, 'bold'), command=reactor.stop)
 	app.btnOK.place(relwidth=1,relheight=1)
 
-	txt = app.BodyText
 	txt.place(width=0)
 	txt.configure(bg="#fffdfd")
 	txt.config(state=NORMAL)
