@@ -14,7 +14,7 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks"
-__version__	= "1.4.1"
+__version__	= "1.4.4"
 
 
 from ooliteConsoleServer import *
@@ -92,7 +92,7 @@ class Window:
 		self.yScroll = Scrollbar (self.frame, orient=VERTICAL, width=16)
 		self.yScroll.pack(side=LEFT, anchor=E, fill=Y, expand=YES)
 		
-		self.BodyText = Text(self.frame, bg="#dadddd", bd=0, font=('arial', 10, 'normal'), wrap=WORD,yscrollcommand=self.yScroll.set)
+		self.BodyText = Text(self.frame,bg="#dadddd", bd=0, padx=2, font=('arial', 10, 'normal'), wrap=WORD, yscrollcommand=self.yScroll.set)
 		
 		self.BodyText.tag_config('dbg')
 		self.BodyText.place(relwidth=1, relheight=1, width=-16)
@@ -169,6 +169,7 @@ class Window:
 		if len(s) < 1 or isDbg: txt.insert(END,'\n','dbg')
 		txt.config(state=DISABLED)
 		txt.see(END)
+		txt.tag_raise('sel')
 	
 	def cClear(self):
 		self.tried = 0
@@ -254,7 +255,7 @@ try:
 	except:
 		pass
 	try:
-		DEBUGCOLS = initConfig.getboolean('Settings','DebugCols')
+		DEBUGCOLS = initConfig.getboolean('Settings','DebugColors')
 	except:
 		pass
 
@@ -313,21 +314,23 @@ COLORS['macro-info'] = '#5a5'
 COLORS['command-exception'] = '#606'
 
 txt = app.BodyText
+txt.tag_configure('sel', foreground ='#dcecf2', background='#5c6070')
 
 if initConfig.has_section('Colors'):
 	cols = initConfig.options('Colors')
 	for col in cols:
 		try:
-			tmp = Config.get('Colors', col)
+			tmp = initConfig.get('Colors', col)
 			txt.tag_configure('tmp', foreground=tmp)
 			COLORS[col.lower()] = tmp
 		except:
-			pass
+			if DEBUGCOLS: app.Print(" CFG Error: "+col+" = "+tmp+" -  wrong value '"+tmp+"'")
+if float(txt.index(END)) > 2: app.Print('')
 			
-for col in COLORS:
-	txt.tag_configure(col, foreground=COLORS[col])
-	if (col == 'command'): txt.tag_configure(col, font=('arial',9,'bold'), background='#e8ebeb')
-	
+for col,val in COLORS.items():
+	txt.tag_configure(col, foreground=val)
+	if col is 'command': txt.tag_configure(col, font=('arial',9,'bold'), background='#e8ebeb')
+
 #app.Print(COLORS)
 
 # Set up console server protocol
