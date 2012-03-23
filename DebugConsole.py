@@ -14,7 +14,7 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks"
-__version__	= "1.4"
+__version__	= "1.4.1"
 
 
 from ooliteConsoleServer import *
