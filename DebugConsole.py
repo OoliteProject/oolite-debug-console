@@ -14,7 +14,7 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks"
-__version__	= "1.4.4"
+__version__	= "1.5"
 
 
 from ooliteConsoleServer import *
@@ -23,12 +23,15 @@ from twisted.internet import stdio, reactor, tksupport
 from OoliteDebugCLIProtocol import OoliteDebugCLIProtocol
 from Tkinter import *
 
-import string, os, ConfigParser
+import string, os, ConfigParser, pickle
 
 
 CFGFILE = 'DebugConsole.cfg'
 # if we're using the compiled version, it's OoDebugConsole.cfg rather than DebugConsole.cfg
 if hasattr (sys,'frozen'): CFGFILE = 'Oo' + CFGFILE
+
+# use a corresponding cli history file.
+HISTFILE = CFGFILE.replace('.cfg','.dat')
 
 class SimpleConsoleDelegate:
 	__active = Active = False
@@ -51,23 +54,28 @@ class SimpleConsoleDelegate:
 		cliHandler.inputReceiver = self
 	
 	def connectionClosed(self, message):
-		if message != None and len(message) > 0:
-			app.Print ('Connection closed:"' + message +'"')
-		else:
-			app.Print ("Connection closed with no message.")
+		if message is None or isinstance(message, str):
+			if message is not None and len(message) > 0:
+				app.Print ('Connection closed:"' + message +'"')
+			else:
+				app.Print ("Connection closed with no message.")
 		if self.__active:
 			self.protocol.factory.activeCount -= 1
 			self.__active = self.Active = False
+		app.tried=0
 	
 	def writeToConsole(self, message, colorKey, emphasisRanges):
-		#assuming the first 2 lines are the command echo
 		app.colPrint(message, colorKey)
 	
 	def clearConsole(self):
-		pass
+		app.cClear(True)
 		
 	def showConsole(self):
-		pass
+		if (ENABLESHOW):
+			if root.state() is not 'zoomed' and root.state() is not 'normal': root.state('normal')
+			root.wm_attributes("-topmost", 1)
+			root.wm_attributes("-topmost", 0)
+			app.cli.focus_set()
 	
 	def send(string):
 		receiveUserInput(string)
@@ -140,7 +148,7 @@ class Window:
 				self.cli.delete( '1.0', END) 
 			else:
 				if self.tried == 0:
-					self.Print("\nPlease (re)start Oolite in order to connect.\nYou can only use the console after you're connected.")
+					self.Print("\n"+CONNECTINFO+"\nYou can only use the console after you're connected.")
 				elif self.tried == 1:
 					self.Print(' * Please connect to Oolite first! * ')
 				self.tried=self.tried+1
@@ -171,11 +179,14 @@ class Window:
 		txt.see(END)
 		txt.tag_raise('sel')
 	
-	def cClear(self):
-		self.tried = 0
-		self.BodyText.config(state=NORMAL)
-		self.BodyText.delete('1.0', END)
-		self.BodyText.config(state=DISABLED)
+	def cClear(self,body=False):
+		if body or OLDCLEAR:
+			self.tried = 0
+			self.BodyText.config(state=NORMAL)
+			self.BodyText.delete('1.0', END)
+			self.BodyText.config(state=DISABLED)
+		else:
+			self.cli.delete('1.0', END)
 	
 	def cHistoryBack(self, event):
 		if self.history:
@@ -205,12 +216,20 @@ class Window:
 	
 	def cExit(self_):
 		saveConfig = True
+		saveHistory = True
 		config = ConfigParser.RawConfigParser()
 		config.optionxform = str
 		try:
 			fp = open(CFGFILE)
 			config.readfp(fp)
-			saveConfig = config.getboolean('Settings','SaveConfigOnExit')
+			try:
+				saveConfig = config.getboolean('Settings','SaveConfigOnExit')
+			except:
+				pass
+			try:
+				saveHistory = config.getboolean('Settings','SaveHistoryOnExit')
+			except:
+				pass
 			fp.close()
 		except Exception: 
 			pass
@@ -224,6 +243,13 @@ class Window:
 				cfg = open(CFGFILE, 'w')
 				config.write(cfg)
 				cfg.close()
+			except Exception:
+				pass
+		if saveHistory:
+			try:
+				hfile = open(HISTFILE, 'wb')
+				pickle.dump(app.history[-200:], hfile, -1)
+				hfile.close()
 			except Exception:
 				pass
 		
@@ -241,6 +267,9 @@ root.protocol("WM_DELETE_WINDOW", app.cExit)
 # Load initial settings
 consolePort = None
 DEBUGCOLS = False
+ENABLESHOW = True
+OLDCLEAR = False
+CONNECTINFO = "Please (re)start Oolite in order to connect."
 initConfig = ConfigParser.RawConfigParser()
 try:
 	fp = open(CFGFILE)
@@ -256,6 +285,18 @@ try:
 		pass
 	try:
 		DEBUGCOLS = initConfig.getboolean('Settings','DebugColors')
+	except:
+		pass
+	try:
+		ENABLESHOW = initConfig.getboolean('Settings','EnableShowConsole')
+	except:
+		pass
+	try:
+		OLDCLEAR = initConfig.getboolean('Settings','OldClearBehaviour')
+	except:
+		pass
+	try:
+		CONNECTINFO = initConfig.get('Settings','ConnectInfo')
 	except:
 		pass
 
@@ -332,6 +373,16 @@ for col,val in COLORS.items():
 	if col is 'command': txt.tag_configure(col, font=('arial',9,'bold'), background='#e8ebeb')
 
 #app.Print(COLORS)
+
+# Restore CLI history from its savefile
+try:
+	hfile = open(HISTFILE, 'rb')
+	app.history = pickle.load(hfile)
+	hfile.close()
+	if not isinstance(app.history, list):
+		app.history = []
+except:
+	pass
 
 # Set up console server protocol
 factory = Factory()
