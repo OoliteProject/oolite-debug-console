@@ -6,7 +6,7 @@
 #  Created by Jens Ayton on 2007-11-29.
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
-#  GUI I/O stuff (c) 2008-2012 Kaks. CC-by-NC-SA 3
+#  GUI I/O stuff (c) 2008-2013 Kaks. CC-by-NC-SA 3
 #
 
 """
