@@ -6,14 +6,14 @@
 #  Created by Jens Ayton on 2007-11-29.
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
-#  GUI I/O stuff (c) 2008-2013 Kaks. CC-by-NC-SA 3
+#  GUI I/O stuff (c) 2008-2012 Kaks. CC-by-NC-SA 3
 #
 
 """
 A gui implementation of the Oolite JavaScript debug console interface.
 """
 
-__author__	= "Jens Ayton <jens@ayton.se>, Kaks"
+__author__	= "Jens Ayton <jens@ayton.se>, Kaks, Getafix"
 __version__	= "1.5"
 
 
@@ -266,6 +266,8 @@ root.protocol("WM_DELETE_WINDOW", app.cExit)
 
 # Load initial settings
 consolePort = None
+consoleEndPort = None
+serverAddress = None
 DEBUGCOLS = False
 ENABLESHOW = True
 OLDCLEAR = False
@@ -281,6 +283,14 @@ try:
 		pass
 	try:
 		consolePort = initConfig.get('Settings','Port')
+	except:
+		pass
+	try:
+		consoleEndPort = initConfig.get('Settings','EndPort')
+	except:
+		pass
+	try:
+		serverAddress = initConfig.get('Settings','ServerAddress')
 	except:
 		pass
 	try:
@@ -312,7 +322,7 @@ except Exception:
 # Set up icon if possible
 try:
 #	windows compiled runtime (pyInstall)
-	root.iconbitmap(os.path.join(os.environ['_MEIPASS2'], "OoJSC.ico"))
+	root.iconbitmap(os.path.join(sys._MEIPASS, "OoJSC.ico"))
 except Exception:
 	try: 
 # 	normal windows runtime
@@ -327,17 +337,37 @@ except Exception:
 # Set up the console's port using the Port setting inside the .cfg file.
 # All dynamic, private, or ephemeral ports 'should' be between 49152-65535. However, the default port is 8563.
 connectPort = defaultOoliteConsolePort
+connectEndPort = connectPort
 if consolePort is not None:
 	try:
 		consolePort = int(consolePort)
 	except:
 		pass
-	if consolePort > 1 and consolePort < 65536:
+#	if consolePort > 49151 and consolePort < 65536:
+	if 49151 < consolePort < 65536:
 		connectPort = consolePort
-		app.Print ("Listening on port " + str(connectPort) +".")
-		root.title("Oolite - Javascript Debug Console:" + str(connectPort))
+		if consoleEndPort is not None:
+			try:
+				consoleEndPort = int(consoleEndPort)
+			except:
+				pass
+#			if consoleEndPort <= consolePort or consoleEndPort > 65535:
+			if consolePort < consoleEndPort < 65536:
+				connectEndPort = consoleEndPort 
+			else:
+				app.Print ("EndPort setting should be greater than Port setting,")
+				app.Print ("and less than 65536.")
+				app.Print ("EndPort setting will be ignored.")
+				connectEndPort = connectPort
 	else:
-		app.Print ("Invalid port specified. Using default port (" + str(connectPort) +").")
+		app.Print ("Invalid Port setting specified.")
+		app.Print ("Valid Port setting should be in the range of 49152-65535.")
+		app.Print ("Trying listening on default port (" + str(connectPort) + ").")
+		if consoleEndPort is not None:
+			app.Print ("EndPort setting will be ignored.")
+else:
+	if consoleEndPort is not None:
+		app.Print ("EndPort setting without Port setting will be ignored.")
 
 # Set up Colors:
 COLORS = {'general':'#000','command':'#006','warning':'#660','error':'#800','exception':'#808'}
@@ -398,15 +428,28 @@ stdio.StandardIO(cliHandler)
 # Install the Reactor support
 tksupport.install(root)
 
-try:
-	app.listener=reactor.listenTCP(connectPort, factory)
+if serverAddress is not None:
+	serverAddress = str(serverAddress) + ":"
+else:
+	serverAddress = "port "
+listeningPort = 0
+for tryPort in range(connectPort,connectEndPort+1):
+    try:
+	app.listener=reactor.listenTCP(tryPort, factory)
+	listeningPort = tryPort
+	root.title("Oolite Javascript Debug Console (" + str(serverAddress) + str(listeningPort) + ")")
+	app.Print ("Listening on " + str(serverAddress) + str(listeningPort) + "...")
 	app.Print ("Use Up and Down arrows to scroll through the command history.")
 	app.Print ("Type /quit to quit.")
-	app.Print ("Waiting for connection...")
-except Exception, e:
+    except Exception, e:
+	continue
+    else:
+	break
+
+if listeningPort == 0:
 	oops = str(e)
-#	oops = "\nAnother process is already listening on "
-#	oops += "\nthe default port." if (connectPort == defaultOoliteConsolePort) else "port " + str(connectPort) +"."
+	oops += "\n\nNo available ports to start listening for Oolite connections."
+	oops += "\nPlease, try again later."
 	oops += "\n\nThis debug console will close now."
 	root.minsize(1, 1)
 	root.resizable(NO, NO)
@@ -426,6 +469,8 @@ except Exception, e:
 	txt.insert(END,oops,'center')
 	root.geometry("320x" + str(int((float(txt.index(END))-5)*16 + 166)))
 	txt.config(state=DISABLED)
+else:
+	connectPort=listeningPort
 
 # Wait for user input.
 reactor.run()
