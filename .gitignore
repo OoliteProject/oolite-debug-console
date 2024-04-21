@@ -9,3 +9,8 @@ Icon?
 # Python cruft
 *.pyc
 *.pyo
+
+# pyinstaller cruft
+*.spec
+build/
+dist/
