@@ -21,6 +21,8 @@ from twisted.internet.protocol import Factory
 from twisted.internet import stdio, reactor
 from OoliteDebugCLIProtocol import OoliteDebugCLIProtocol
 
+from sys import version_info
+Python2 = version_info[0] == 2
 
 cliHandler = None
 
@@ -40,23 +42,28 @@ class SimpleConsoleDelegate:
 		return self.protocol.factory.activeCount < 1
 	
 	def connectionOpened(self, ooliteVersionString):
-		print "Opened connection to Oolite version", ooliteVersionString
+		print("Opened connection to Oolite version", ooliteVersionString)
 		self.protocol.factory.activeCount += 1
 		self.__active = True
 		cliHandler.inputReceiver = self
 	
 	def connectionClosed(self, message):
+		# newer versions of twisted will send subsequent message(s) of class Failure
+		if Python2 and not isinstance(message, str): 
+			return
+		elif not isinstance(message, bytes): 
+			return 
 		if message != None and len(message) > 0:
-			print "Connection closed with message:", message
+			print("Connection closed with message:", message)
 		else:
-			print "Connection closed with no message."
-		print ""
+			print("Connection closed with no message.")
+		print("")
 		if self.__active:
 			self.protocol.factory.activeCount -= 1
 			self.__active = False
 	
 	def writeToConsole(self, message, colorKey, emphasisRanges):
-		print "  " + message
+		print("  " + message)
 	
 	def clearConsole(self):
 		pass
@@ -64,7 +71,7 @@ class SimpleConsoleDelegate:
 	def showConsole(self):
 		pass
 	
-	def receiveUserInput(self, string):
+	def receiveUserInput(self, string):	
 		self.protocol.sendCommand(string)
 	
 	def closeConnection(self, message):
@@ -86,10 +93,10 @@ cliHandler = OoliteDebugCLIProtocol()
 cliHandler.getInputReceiver = getInputReceiver
 stdio.StandardIO(cliHandler)
 
-print "Python Oolite debug console"
-print "Type /quit to quit."
-print "Waiting for connection..."
-print ""
+print("Python Oolite debug console")
+print("Type /quit to quit.")
+print("Waiting for connection...")
+print("")
 
 reactor.listenTCP(defaultOoliteConsolePort, factory)
 reactor.run()

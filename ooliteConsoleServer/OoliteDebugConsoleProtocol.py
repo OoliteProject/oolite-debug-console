@@ -6,11 +6,11 @@
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
 
-
-from PropertyListPacketProtocol import PropertyListPacketProtocol
+from .PropertyListPacketProtocol import PropertyListPacketProtocol
 import ooliteConsoleServer._protocol as P
-import sys
 
+import logging
+consoleLogger = logging.getLogger('DebugConsole.ODCProtocol')
 
 class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	"""
@@ -55,7 +55,9 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	
 	def sendCommand(self, commandString):
 		if self.__open:
-			packet = { P.packetTypeKey: P.performCommandPacket, P.messageKey: commandString or "" }
+			# cmdStr = commandString.decode('ascii') if isinstance(commandString, bytes) else commandString
+			cmdStr = commandString.decode('utf-8') if isinstance(commandString, bytes) else commandString
+			packet = { P.packetTypeKey: P.performCommandPacket, P.messageKey: cmdStr or "" }
 			self.sendPlistPacket(packet)
 	
 	
@@ -63,16 +65,20 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 		if self.__open:
 			self.__open = False
 			packet = { P.packetTypeKey: P.closeConnectionPacket }
-			if message != None:  packet[P.messageKey] = message
+			if message != None:
+				# msgStr = message.decode('ascii') if isinstance(message, bytes) else message
+				msgStr = message.decode('utf-8') if isinstance(message, bytes) else message
+				packet[P.messageKey] = msgStr
 			self.sendPlistPacket(packet)
 			
 			self.__closed = True
 			self.transport.loseConnection()
 			self.delegate.connectionClosed(message)
-	
-	
+
+			
 	def configurationValue(self, key):
-		return self.__configuration[key]
+		if key in self.__configuration:
+			return self.__configuration[key]
 	
 	
 	def hasConfigurationValue(self, key):
@@ -80,8 +86,9 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	
 	
 	def setConfigurationValue(self, key, value):
-		if self.__open and self.__configuration[key] != value:
-			packet = { P.packetTypeKey: P.noteConfigurationPacket }
+		if self.__open and (not hasattr(self.__configuration, key) or self.__configuration[key] != value):
+			packet = { P.packetTypeKey: P.noteConfigurationChangePacket }
+			# packet = { P.packetTypeKey: P.noteConfigurationPacket } # these types of packets are receive only
 			if value != None:
 				packet[P.configurationKey] = { key: value }
 			else:
@@ -91,8 +98,8 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	# Internals beyod this point
 	def connectionMade(self):
 		self.delegate = self.factory.delegateClass(self)
-	
-	
+
+		
 	def connectionLost(self, reason):
 		if self.__open:
 			self.__open = False
@@ -101,7 +108,8 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 		elif not self.__closed:
 			self.__closed = True
 		self.delegate.connectionClosed(reason)
-	
+
+		
 	def plistPacketReceived(self, packet):
 		# Dispatch based on packet type.
 		type = packet[P.packetTypeKey]
@@ -127,12 +135,13 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 			self.__unknownPacket(type, packet)
 	
 	
-	def badPacketReceived(self, data):
-		print >> sys.stderr, "Received bad packet, ignoring."
+	def DebugConsole(self, data):
+		consoleLogger.warning("Received bad packet, ignoring.")
+		consoleLogger.debug(data)
 	
 	
 	def badPListSend(self, plist):
-		print >> sys.stderr, "Attempt to send bad packet: ", data
+		consoleLogger.warning("Attempt to send bad plist: {}".format(plist))
 	
 	
 	def __requestConnectionPacket(self, packet):
@@ -144,7 +153,7 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 			try:
 				self.delegate.connectionClosed("This console does not support the requested protocol version.")
 			except:
-				print "OoliteDebugConsoleProtocol: delegate.connectionClosed failed."
+				consoleLogger.exception("OoliteDebugConsoleProtocol: delegate.connectionClosed failed.")
 				# Ignore
 		else:
 			# Handle connection request
@@ -156,11 +165,11 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 					# Pass to delegate
 					self.delegate.connectionOpened(packet[P.ooliteVersionKey])
 					self.__open = True
-			except Exception, inst:
-				print "Exception in connection set-up: ", inst
+			except Exception as inst:
+				consoleLogger.exception("Exception in connection set-up: ", inst)
 			
 			if not self.__open:
-				print "Failed to open connection."
+				consoleLogger.error("Failed to open connection.")
 				# No delegate or delegate failed -> reject connection.
 				response = { P.packetTypeKey: P.rejectConnectionPacket, P.messageKey: "This console is not accepting connections." }
 				if self.rejectMessage != None:
@@ -209,12 +218,14 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	def __noteConfigurationPacket(self, packet):
 		if self.__open and P.configurationKey in packet:
 			self.__configuration = packet[P.configurationKey]
+			if hasattr(self.delegate, 'loadConfig'):
+				self.delegate.loadConfig(self.__configuration)
 	
 	
 	def __noteConfigurationChangePacket(self, packet):
 		if self.__open:
 			if P.configurationKey in packet:
-				for k, v in packet[P.configurationKey].iteritems():
+				for k, v in packet[P.configurationKey].items():
 					self.__configuration[k] = v
 			if P.removedConfigurationKeysKey in packet:
 				for k in packet[P.removedConfigurationKeysKey]:
@@ -236,4 +247,4 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	
 	def __unknownPacket(self, type, packet):
 		#unknown packet, complain.
-		print >> sys.stderr, 'Unkown packet type "' + type + '", ignoring.'
+		consoleLogger.error('Unkown packet type "{}", ignoring.'.format(type))

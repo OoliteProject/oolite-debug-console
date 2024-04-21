@@ -6,32 +6,39 @@
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
 
-
 from twisted.internet import stdio, reactor
 from twisted.protocols import basic
-import sys
+# import sys
+from sys import version_info as version_info
+from sys import stderr as stderr
+
+import logging
+cmdLogger = logging.getLogger('DebugConsole.CLIProtocol')
 
 
 class OoliteDebugCLIProtocol(basic.LineReceiver):
-	delimiter = "\n"
+	delimiter = "\n" if version_info[0] == 2 else b"\n"
 	inputReceiver = None
 	
 	
 	def connectionMade(self):
 		pass
 	
-	
-	def lineReceived(self, line):
-		if not line:  return
-		
+	def lineReceived(self, bsline):
+		if not bsline:  return
 		try:
-			if line[0] == "/":  self.__internalCommand(line)
-			elif self.inputReceiver:
-				self.inputReceiver.receiveUserInput(line)
+			if isinstance(bsline, bytes):
+				line = bsline.decode('ascii') 
 			else:
-				print "No client connected."
+				line = bsline
+			if line[0] == "/":  
+				self.__internalCommand(line)
+			elif self.inputReceiver:
+				self.inputReceiver.receiveUserInput(bsline)
+			else:
+				cmdLogger.warning("No client connected.")
 		except:
-			print >> sys.stderr, "Exception in input handler."
+			cmdLogger.exception("Exception in input handler.")
 	
 	
 	def __internalCommand(self, line):
@@ -40,12 +47,15 @@ class OoliteDebugCLIProtocol(basic.LineReceiver):
 		args = parts[1:]
 		argMsg = str.join(" ", args)
 		
-		# print 'Internal command "' + command  + '" with arguments "' + argMsg + '".'
+		# cmdLogger.debug('Internal command "' + command  + '" with arguments "' + argMsg + '".')
 		
-		if (command == "quit"):  reactor.stop()
-		elif (command == "close"):
+		if command == "quit":  
+			reactor.stop()
+		elif command == "close":
 			# Note: I don't recommend using the /close command, as it crashes Oolite.
-			if self.inputReceiver:  self.inputReceiver.closeConnection(argMsg)
-			else:  print "No client connected."
+			if self.inputReceiver:  
+				self.inputReceiver.closeConnection(argMsg)
+			else:  
+				cmdLogger.warning("No client connected.")
 		else:
-			print >> sys.stderr, "Unknown console command: " + line
+			cmdLogger.error("Unknown console command: " + line, file=stderr)

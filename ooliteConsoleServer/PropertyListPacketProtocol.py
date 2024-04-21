@@ -5,27 +5,39 @@
 #  Created by Jens Ayton on 2007-11-29.
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
-
+#  Trivial fixes (c) 2024 MrFlibble CC-by-NC-SA 4
+#
 
 from twisted.internet.protocol import Protocol
-from plistlib import readPlist, writePlist
-from cStringIO import StringIO
+
+from sys import version_info
+Python2 = version_info[0] == 2
+if Python2:
+	from plistlib import readPlistFromString as readPlist
+	from plistlib import writePlistToString as writePlist
+else:
+	from plistlib import loads, dumps
+
+import logging
+plistLogger = logging.getLogger('DebugConsole.PLPProtocol')
 
 
-# These are part of plistlib.py on Mac OS X, but not in the files easily
-# available on the web.
 def readPlistFromString(data):
-    """Read a plist data from a string. Return the root object.
-    """
-    return readPlist(StringIO(data))
+	"""Read a plist data from a string. Return the root object.
+	"""
+	if Python2:
+		return readPlist(data)
+	else:
+		return loads(data)
 
 
 def writePlistToString(rootObject):
-    """Return 'rootObject' as a plist-formatted string.
-    """
-    f = StringIO()
-    writePlist(rootObject, f)
-    return f.getvalue()
+	"""Return 'rootObject' as a plist-formatted string.
+	"""
+	if Python2:
+		return writePlist(rootObject)
+	else:
+		return dumps(rootObject)
 
 
 class PropertyListPacketProtocol(Protocol):
@@ -50,8 +62,12 @@ class PropertyListPacketProtocol(Protocol):
 	to a subclass's plistPacketReceived() method.
 	"""
 	
-	__buffer = ""
-	__received = ""
+	if Python2:
+		__buffer = ""
+		__received = ""
+	else: # in pdb, prepend to key: _PropertyListPacketProtocol
+		__buffer = bytearray()
+		__received = bytearray()
 	__expect = 0
 	__sizeCount = 0
 	
@@ -62,16 +78,19 @@ class PropertyListPacketProtocol(Protocol):
 		This method handles the decoding of incoming packets and dispatches
 		them to be handled by the subclass implementation.
 		"""
-		
+
 		# Append data to incoming buffer
 		self.__received += data
-		
+
 		# Loop over buffer
 		while len(self.__received) > 0:
 			if self.__sizeCount < 4:
 				# Receiving header (size)
 				# Decode as big-endian 32-bit integer
-				self.__expect = (self.__expect << 8) + ord(self.__received[0])
+				if Python2:
+					self.__expect = (self.__expect << 8) + ord(self.__received[0])
+				else:
+					self.__expect = (self.__expect << 8) + self.__received[0]
 				self.__received = self.__received[1:]
 				self.__sizeCount += 1
 			else:
@@ -80,9 +99,8 @@ class PropertyListPacketProtocol(Protocol):
 					# This is not the end of the data
 					self.__buffer += self.__received
 					self.__expect -= len(self.__received)
-					self.__received = ""
+					self.__received = "" if Python2 else bytearray()
 				else:
-					# End of packet reached
 					self.__buffer += self.__received[:self.__expect]
 					self.__received = self.__received[self.__expect:]
 					try:
@@ -90,8 +108,8 @@ class PropertyListPacketProtocol(Protocol):
 					finally:
 						# Expect new packet
 						self.__reset()
-	
-	
+
+
 	def sendPlistPacket(self, packet):
 		"""
 		Send a packet (property list). Called by subclass or client objects.
@@ -107,15 +125,19 @@ class PropertyListPacketProtocol(Protocol):
 			data = None
 		if data:
 			length = len(data)
-			self.transport.write(chr((length >> 24) & 0xFF))
-			self.transport.write(chr((length >> 16) & 0xFF))
-			self.transport.write(chr((length >> 8) & 0xFF))
-			self.transport.write(chr(length & 0xFF))
+			if Python2:
+				self.transport.write(chr((length >> 24) & 0xFF))
+				self.transport.write(chr((length >> 16) & 0xFF))
+				self.transport.write(chr((length >> 8) & 0xFF))
+				self.transport.write(chr(length & 0xFF))
+			else:
+				hdr = bytearray( ((length >> 24) & 0xFF, (length >> 16) & 0xFF, (length >> 8) & 0xFF, length & 0xFF) )
+				self.temp=bytes(hdr)
+				self.transport.write(self.temp)
 			self.transport.write(data)
 		else:
 			self.badPListSend(packet)
-	
-	
+
 	def __dispatchPacket(self):
 		# Decode plist and send to subclass method
 		plist = None
@@ -123,25 +145,28 @@ class PropertyListPacketProtocol(Protocol):
 			plist = readPlistFromString(self.__buffer)
 		except:
 			plist = None
-		
-		if plist:  self.plistPacketReceived(plist)
-		else:  self.badPacketReceived(self.__buffer)
-	
-	
+		if plist:
+			self.plistPacketReceived(plist)
+		else:
+			self.DebugConsole(self.__buffer)
+
 	def __reset(self):
 		# Reset to waiting-for-beginning-of-packet state.
 		self.__expect = 0
 		self.__sizeCount = 0
-		self.__buffer = ""
-	
+		if Python2:
+			self.__buffer = "" 
+		else:
+			del self.__buffer[:]
+
 	def plistPacketReceived(self, plist):
 		# Doing something useful with the plist is a subclass responsibilitiy.
 		pass
-	
-	def badPacketReceived(self, data):
+
+	def DebugConsole(self, data):
 		# Called for bad (non-plist) packets; subclasses may override.
 		pass
-	
+
 	def badPListSend(self, plist):
 		# Called for invalid (non-plist) objects sent to sendPListPacket(); subclasses may override.
 		pass
