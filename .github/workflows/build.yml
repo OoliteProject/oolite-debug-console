@@ -82,23 +82,63 @@ jobs:
 
     - name: create archive
       run: |
-        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}.tgz dist/
+        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux.tgz dist/
         
     - uses: actions/upload-artifact@v4
       with:
         name: Oolite-Debug-Console-Ubuntu
-        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}.tgz
+        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux.tgz
 
-#  package-windows:
-#    needs: [semver]
-#    runs-on: windows-latest
-#    steps:
+  package-windows:
+    needs: [semver]
+    runs-on: windows-latest
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-#  package-macos:
-#    needs: [semver]
-#    runs-on: macos-latest
-#
-#    steps:
+    # in Windows PowerShell the backtick indicates a multiline command
+    # see https://stackoverflow.com/questions/3235850/how-to-enter-a-multi-line-command
+    - name: Build using pyinstaller
+      run: |
+        pyinstaller `
+          --noconfirm `
+          --clean `
+          --log-level=WARN `
+          --paths "C:\Program Files (x86)\Windows Kits\10\Redist\ucrt\DLLs\x86"  `
+          --onefile `
+          --noconsole `
+          --noupx `
+          --name OoDebugConsole `
+          --icon=OoliteDebugConsole\OoJSC.ico `
+          --add-binary "OoliteDebugConsole\OoJSC.ico:." `
+          --add-binary "OoliteDebugConsole\oojsc.xbm:." `
+          --version-file=OoDebug_version_info.txt `
+          DebugConsole.py
+
+  package-macos:
+    needs: [semver]
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: setup pyenv
+      run: |
+        #sudo apt-get install python3-tk python3-venv python3-pip
+        python3 -m ensurepip --upgrade
+        venv="$HOME/python3/pyinstaller"
+        rm -Rf "$venv"  # uncomment to make fresh venv.
+        python3 -m venv "$venv"
+        source "${venv}"/bin/activate
+        pip install python3-tk
+        pip install pyinstaller
+        pip install twisted
+
 
   release:
 #    needs: [semver,package-linux,package-windows,package-macos]
