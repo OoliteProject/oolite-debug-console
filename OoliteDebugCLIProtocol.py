@@ -6,18 +6,24 @@
 #  Copyright (c) 2007 Jens Ayton. All rights reserved.
 #
 
-from twisted.internet import stdio, reactor
+from twisted.internet import reactor
 from twisted.protocols import basic
-# import sys
-from sys import version_info as version_info
-from sys import stderr as stderr
+import sys
 
 import logging
 cmdLogger = logging.getLogger('DebugConsole.CLIProtocol')
 
 
-class OoliteDebugCLIProtocol(basic.LineReceiver):
-	delimiter = "\n" if version_info[0] == 2 else b"\n"
+class OoliteDebugCLIProtocol(basic.LineOnlyReceiver):
+# "... a speed optimisation over LineReceiver, for the
+# 	cases that raw mode is known to be unnecessary..."
+# MAX_LENGTH: Default is 16384. 
+# If a sent line is longer than this, the connection is dropped!
+
+# class OoliteDebugCLIProtocol(basic.LineReceiver):
+					 
+	
+	delimiter = "\n" if sys.version_info[0] == 2 else b"\n"
 	inputReceiver = None
 	
 	
@@ -36,10 +42,17 @@ class OoliteDebugCLIProtocol(basic.LineReceiver):
 			elif self.inputReceiver:
 				self.inputReceiver.receiveUserInput(bsline)
 			else:
-				cmdLogger.warning("No client connected.")
+				errmsg = "No client connected."
+				cmdLogger.warning(errmsg)
+				print(errmsg)
 		except:
-			cmdLogger.exception("Exception in input handler.")
-	
+			errmsg = "Exception in input handler."
+			cmdLogger.exception(errmsg)
+			# no simple way to redirect output for both Python 2 & 3
+			saved_stdout = sys.stdout
+			sys.stdout = sys.stderr
+			print(errmsg)
+			sys.stdout = saved_stdout
 	
 	def __internalCommand(self, line):
 		parts = line[1:].split()
@@ -55,7 +68,15 @@ class OoliteDebugCLIProtocol(basic.LineReceiver):
 			# Note: I don't recommend using the /close command, as it crashes Oolite.
 			if self.inputReceiver:  
 				self.inputReceiver.closeConnection(argMsg)
-			else:  
-				cmdLogger.warning("No client connected.")
+			else:
+				errmsg = "No client connected."
+				cmdLogger.warning(errmsg)
+				print(errmsg)
 		else:
-			cmdLogger.error("Unknown console command: " + line, file=stderr)
+			errmsg = "Unknown console command: " + line
+			cmdLogger.error(errmsg)
+			# no simple way to redirect output for both Python 2 & 3
+			saved_stdout = sys.stdout
+			sys.stdout = sys.stderr
+			print(errmsg)
+			sys.stdout = saved_stdout

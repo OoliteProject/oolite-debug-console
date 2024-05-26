@@ -1,0 +1,410 @@
+# -*- coding: utf-8 -*-
+#
+# (c) 2021 cag CC BY-NC-SA 4.0
+#
+import re
+from operator import itemgetter
+
+import pdb, traceback
+
+import debugGUI.constants as con
+import debugGUI.regularExpn as rx
+
+def is_str(value):
+	"""Python version agnostic string type checker"""
+	
+	return isinstance(value, (str, unicode) if con.Python2 else str)
+
+def inbounds(index, string, incr=0):
+	"""check if 'index' + 'incr' is a valid 'string' offset"""
+	
+	return -1 < (index + incr) < len(string)
+
+def removeWS(string):
+	"""return 'string' with all of its whitespace characters [\r\n \t\v\f] 
+	   removed"""
+	
+	return re.sub(r'\s', '', string)
+
+def leadingWS(string, start=0, stop=None, WS=' '):
+	"""number of contiguous characters in 'WS' forward in 'string' 
+	   from 'start' to 'stop'"""
+
+	length = len(string)
+	if stop is None or not (-1 < stop < length):
+		stop = length
+	count = 0
+	while -1 < start + count < stop and string[start + count] in WS:
+		count += 1
+	return count
+
+def trailingWS(string, start=None, stop=None, WS=' '):
+	"""number of contiguous characters in 'WS' backward in 'string' 
+	   from 'start' to 'stop'"""
+
+	length = len(string)
+	if start is None or not (-1 < start < length):
+		start = length
+	if stop is None or not (-1 < stop < length):
+		stop = length
+	start -= 1 							# exclude last char
+	count = 0
+	while -1 < start - count < stop and string[start - count] in WS:
+		count += 1
+	return count
+
+def startsLine(string, start=0, stop=None):
+	"""index of first NL in 'string' between 'start' and 'stop', 
+	   -1 if not present"""
+
+	length = len(string)
+	if stop is None or not (-1 < stop < length):
+		stop = length
+	newline = string.find(con.NL, start, stop)
+	if -1 < newline:
+		if newline == start:
+			return newline
+		if string[start:newline].isspace():
+			return newline
+	return -1
+
+def endsLine(string, start=0, stop=None):
+	"""index of last NL in 'string' between 'start' and 'stop', 
+	   -1 if not present"""
+
+	length = len(string)
+	if stop is None or not (-1 < stop < length):
+		stop = length	# rfind searches [start:end], ie. [end] not included
+	newline = string.rfind(con.NL, start, stop)
+	if -1 < newline:
+		if newline == stop - 1:
+			return newline
+		if string[newline:stop].isspace():
+			return newline
+	return -1
+
+def countNLs(string, start, step, stop=None):
+	"""number of NLs (possibly separated by 'WHITESPACE') in 'string'
+	   from 'start' in direction 'step'"""
+
+	length = len(string)
+	if step < 0: 
+		# don't count start like rfind doesn't w/ end
+		start -= 1				
+	if stop is None or not (-1 < stop < length):
+		stop = length
+	count = 0
+	while -1 < start < stop and string[start] in con.WHITESPACE:
+		if string[start] == con.NL:
+			count += 1
+		start += step
+	return count
+
+## no in use
+# def nonJsAddedFind(string, target, start, step):
+# 	"""search 'string' from 'start' in direction 'step' for a portion that
+# 	   matches 'target' (usually a string with any JS_ADDED_CHARS removed),
+# 	   ignoring any characters in JS_ADDED_CHARS in 'string'
+# 	   (currently defined as all whitspace characters plus braces and
+# 	    semi-colons, i.e. [\r\n\t\v\f {};])"""
+#
+# 	targetLen = len(target)
+# 	index = 0 if step > 0 else targetLen - 1
+# 	targetsFirst = target[index]
+#
+# 	# print('nonJsAddedFind, target: {!r}, start: {}, step: {}'.format(target, start, step))
+#
+# 	while inbounds(start, string):
+# 		# failed to match, reset search
+# 		start = string.find(targetsFirst, start) if step > 0 else \
+# 				string.rfind(targetsFirst, 0, start)
+# 		if start < 0:
+# 			return -1 						# target's first not in rest of string
+# 		firstFound = start
+# 		index = 0 if step > 0 else targetLen - 1
+# 		# print('  start: {}, firstFound: {!r}, index: {}'.format(start, firstFound, index))
+# 		while string[start] == target[index]:
+# 			# print('    string[{}] {!r} == {!r} target[{}]'.format(start, string[start] , target[index], index))
+# 			if step > 0:					# searching forward for target
+# 				if index >= targetLen - 1:
+# 					# found all target chars, return start of target
+# 					return firstFound   	# index of start of target
+# 			else:							# searching backwards for target
+# 				if index <= 0:
+# 					# found all target chars, return end of target
+# 					return firstFound + 1	# index of char after target
+# 			start += step
+# 			index += step
+# 			# skip those char that were excluded from target
+# 			while string[start] in con.JS_ADDED_CHARS:
+# 				start += step
+# 				if not inbounds(start, string):
+# 					return -1
+# 	return -1
+
+# def nonWSlenStr(string, start, step, stop=None, skip=None,
+# 					radius=con.CONTEXT_RADIUS, WS=con.NO_BREAK_WS):
+# 	try:
+# 		"""return a portion of 'string' of length 'radius' between 'start'
+# 		   and 'stop' that omits any 'WS' characters
+# 		   default 'radius' is 8, default 'WS' is [\t ]"""
+#
+# 		def skipRange(index):
+# 			nonlocal  stack
+# 			while True:
+# 				if stack < 0 or stack >= len(skip):	# stack empty
+# 					break
+# 				ignoreFrom, ignoreTo, hasNL = skip[stack] #[0 if step > 0 else -1]
+# 				if step < 0:
+# 					if index >= ignoreTo:	# past irrelevant ranges to the right
+# 						break
+# 					if ignoreFrom <= index < ignoreTo:	# within current range
+# 						index = max(lowBound, ignoreFrom - 1)
+# 				else:
+# 					if index < ignoreFrom:	# past irrelevant ranges to the left
+# 						break
+# 					if ignoreFrom <= index < ignoreTo:
+# 						index = min(hiBound, ignoreTo)
+# 				stack += step
+# 			return index
+#
+# 		lowBound, hiBound = -1, len(string)
+# 		idx = start
+# 		if step > 0:
+# 			if stop is not None:
+# 				hiBound = stop
+# 		else:
+# 			if stop is not None:
+# 				lowBound = stop
+# 			idx -= 1 	# in reverse, exclude 1 char, like .rfind & [start:end]
+#
+# 		context, skipped = '', ''
+# 		ISindex = -1
+# 		stack = -1 if skip is None else len(skip)
+# 		if skip is not None:
+# 			stack = 0 if step > 0 else len(skip) - 1
+# 		# can start between comments
+# 		idx = idx if stack < 0 else skipRange(idx)
+# 		while lowBound < idx < hiBound:
+# 			if string[idx] not in WS:
+# 				if step < 0:
+# 					context = string[idx] + context
+# 				else:
+# 					context += string[idx]
+# 				if ISindex < 0:
+# 					ISindex = idx
+# 				if len(context) == radius:
+# 					break
+# 			elif len(context) == 0:
+# 				if step < 0:
+# 					skipped = string[idx] + skipped
+# 				else:
+# 					skipped += string[idx]
+# 				if ISindex < 0:
+# 					ISindex = idx
+# 			idx = (idx + step) if stack < 0 else skipRange(idx + step)
+# 		if radius > 0 and len(context) < radius: 			# desired length not found
+# 			return '', -1, -1, ''
+#
+# 		# we also return where we stopped, the index of char closest to comment and
+# 		# those characters we initially skipped
+# 		# - idx points at last char found in context
+# 		return context, idx, ISindex, skipped
+#
+# 	except Exception as exc: ###
+# 		traceback.print_exc()
+# 		pdb.set_trace()
+
+## update w/ an re for speed
+# def skipJsAddedChars(string, start, step):
+# 	"""find next 'string' index in 'step' direction that is not a member
+# 	   of JS_ADDED_CHARS, characters JavaScript's .toString() can insert
+# 	   (currently defined as all whitspace characters + braces and
+# 	    semi-colons, i.e. [\r\n\t\v\f {};])"""
+#
+# 	while inbounds(start, string):
+# 		if string[start] not in con.JS_ADDED_CHARS:
+# 			break
+# 		start += step
+# 	return start
+
+## no longer used
+# def nonJsAddedCharsRE(string, lowBound, step, hiBound=None):
+# 	"""find next run of characters in 'string' in 'step' direction that are not
+# 	   a member of JS_ADDED_CHARS, characters JavaScript's .toString() can insert
+# 	   (currently defined as all whitspace characters + braces and
+# 	    semi-colons, i.e. [\r\n\t\v\f {};])"""
+#
+# 	if hiBound is None:
+# 		hiBound = len(string)
+# 	target = string[lowBound:hiBound]
+# 	nonAdded = [(st.start('stripped'), st.end('stripped'), st['stripped'])
+# 					for st in rx.STRIP_JS_ADDED_RE.finditer(target)]
+#
+# 	print('  nonJsAddedCharsRE, a {} search between {} - {} is {!r} found \n  {}'.format(
+# 			'>' if step > 0 else '<', lowBound, hiBound, target, nonAdded))
+#
+# 	if len(nonAdded) == 0:
+# 		print('  nonJsAddedCharsRE, found nothing, bailing')
+# 		return '', lowBound, lowBound
+#
+# 	if step > 0:
+# 		closest = min(nonAdded, key=itemgetter(0))[0] if len(nonAdded) else 0
+# 		finished = max(nonAdded, key=itemgetter(1))[1] if len(nonAdded) else 0
+# 	else:
+# 		closest = max(nonAdded, key=itemgetter(1))[1] if len(nonAdded) else 0
+# 		finished = min(nonAdded, key=itemgetter(0))[0] if len(nonAdded) else 0
+# 	closest = lowBound + closest
+# 	finished = lowBound + finished
+# 	nonAddedStr = ''.join(string for start, end, string in nonAdded)
+#
+# 	print('  nonJsAddedCharsRE, exit, nonAddedStr: {!r}, closest: {}, finished: {}'
+# 		  .format(nonAddedStr, closest, finished))
+#
+# 	return nonAddedStr, closest, finished
+
+## no longer used
+# def nonJSlenStr(string, start, step, stop=None, skip=None,
+# 				radius=con.CONTEXT_RADIUS):
+# 	"""return a portion of 'string' of length 'radius' between 'start'
+# 	   and 'stop' that omits any characters JS alters: {} ;()
+# 	   default 'radius' is 8"""
+#
+# 	# noinspection PyUnusedLocal
+# 	try:
+#
+# 		def skipRange(index, stackIdx):
+# 			"""when passed, skip is a list of 3-tuples for regions to be
+# 			   bypassed (usually comments).  Tuple contains indices for the
+# 			   start and end of the region and a boolean indicating if the
+# 			   region contains a newline char (irrelevant here).
+# 			   Given 'index', update it if we're currently inside one of the
+# 			   regions; loop contines to catch adjacent regions"""
+# 			try:
+# 				while -1 < stackIdx < skipLen:	# stack not empty
+# 					ignoreFrom, ignoreTo, hasNL = skip[stackIdx]
+# 					#
+# 					# print('  skipRange, index: {},  ignoreFrom: {}, ignoreTo: {}, stackIdx: {}'
+# 					# 	  .format(index, ignoreFrom, ignoreTo, stackIdx))
+# 					#
+# 					if step > 0:
+# 						if index < ignoreFrom:	# past irrelevant ranges to the left
+# 							break
+# 						if ignoreFrom <= index < ignoreTo:
+# 							index = min(hiBound, ignoreTo)
+# 							#
+# 							# print('  skipRange, inside, index = {}'.format(index))
+# 							#
+# 					else:
+# 						if index >= ignoreTo:	# past irrelevant ranges to the right
+# 							break
+# 						if ignoreFrom <= index < ignoreTo:	# within current range
+# 							index = max(lowBound, ignoreFrom - 1)
+# 							#
+# 							# print('  skipRange, inside, index = {}'.format(index))
+# 							#
+# 					stackIdx += step
+# 				#
+# 				# print('  skipRange, returning, index: {}, stackIdx: {}'.format(index,stackIdx))
+# 				#
+# 				return index, stackIdx
+# 			except Exception as exc:
+# 				print(exc)
+# 				traceback.print_exc()
+# 				pdb.set_trace()
+#
+# 		lowBound, hiBound = -1, len(string)
+# 		idx = start
+# 		if step > 0:
+# 			if stop is not None:
+# 				hiBound = stop
+# 		else:
+# 			if stop is not None:
+# 				lowBound = stop
+# 			# idx -= 1 	# in reverse, exclude 1 char, like .rfind & [start:end]
+#
+# 		context, leadUp = '', ''
+# 		skipLen = -1 if skip is None else len(skip)
+# 		firstIdx = -1
+# 		# work the stack from opposite ends depending on 'step', as the regions
+# 		# described in stack read from left to right
+# 		stack = -1 if skip is None else (0 if step > 0 else skipLen - 1)
+# 		# can start between comments
+# 		if -1 < stack:
+# 			idx, stack = skipRange(idx, stack)
+#
+# 		print('\nnonJSlenStr, start: {}, step: {}, stop: {}, skipLen: {}, lowBound: {}, hiBound: {}'
+# 			  .format(start, step, stop, skipLen, lowBound, hiBound))
+#
+# 		while lowBound < idx < hiBound and len(context) < radius:
+# 			if -1 < stack < skipLen:
+# 				nextFrom, nextTo, _ = skip[stack]
+# 			else:
+# 				nextFrom, nextTo = (hiBound, lowBound)
+# 			if step > 0:
+# 				while lowBound < idx < nextFrom:
+# 					segment, closest, lastChar = nonJsAddedCharsRE(string, idx, step, nextFrom)
+#
+# 					print('nonJSlenStr, segment: {!r}, closest: {}, lastChar: {}, context: {!r} -> {!r}'
+# 						  .format(segment, closest, lastChar, context, context + segment))
+#
+# 					if len(segment) == 0: # only JS_ADDED_CHARS left
+# 						idx = nextFrom
+# 						break
+# 					context = context + segment
+# 					if firstIdx < 0:
+# 						leadUp += string[idx:closest]
+# 						firstIdx = closest
+#
+# 					tmp=idx
+#
+# 					idx = skipJsAddedChars(string, lastChar, step)
+#
+# 					print('  idx: {} -> {}'.format(tmp, idx))
+#
+# 			else:
+# 				while nextTo <= idx < hiBound:
+# 					segment, closest, lastChar = nonJsAddedCharsRE(string, nextTo, step, idx)
+#
+# 					print('nonJSlenStr, segment: {!r}, closest: {}, lastChar: {}, context: {!r} -> {!r}'
+# 						  .format(segment, closest, lastChar, context, context + segment))
+#
+# 					if len(segment) == 0: # only JS_ADDED_CHARS left
+# 						idx = max(0, nextTo - 1)
+# 						break
+# 					context = segment + context
+# 					if firstIdx < 0:
+# 						leadUp += string[closest:idx]
+# 						firstIdx = closest
+#
+# 					tmp=idx
+#
+# 					idx = skipJsAddedChars(string, lastChar, step)
+# 					if idx < 0: # only JS_ADDED_CHARS left
+# 						break
+# 					#if idx == lastChar: # no movement can lead to infinite loop as not yet handled
+# 					#also, returns -1 of decr's past start of string
+#
+# 					print('  idx: {} -> {}'.format(tmp, idx))
+#
+# 			if -1 < stack:
+# 				idx, stack = skipRange(idx, stack)
+#
+# 		# if radius > 0 and len(context) < radius: 	# desired length not found
+# 		# 	return '', -1, -1, ''
+#
+# 		# we also return where we stopped, the index of char closest to
+# 		# the characters we initially skipped
+# 		# - idx points at last char found in context
+# 		return context, idx, firstIdx, leadUp
+#
+# 	except Exception as exc: ###
+# 		traceback.print_exc()
+# 		pdb.set_trace()
+
+
+def dictWithInts(aDict):
+	"""convert to int any numerical strings in 'aDict' (.eg. grid_info)
+	"""
+	return {k:(int(v) if is_str(v) and v.isdigit() else v) \
+				for k, v in aDict.items()}

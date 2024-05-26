@@ -12,6 +12,7 @@ import ooliteConsoleServer._protocol as P
 import logging
 consoleLogger = logging.getLogger('DebugConsole.ODCProtocol')
 
+
 class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	"""
 	Class handling a debug console connection.
@@ -55,7 +56,6 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	
 	def sendCommand(self, commandString):
 		if self.__open:
-			# cmdStr = commandString.decode('ascii') if isinstance(commandString, bytes) else commandString
 			cmdStr = commandString.decode('utf-8') if isinstance(commandString, bytes) else commandString
 			packet = { P.packetTypeKey: P.performCommandPacket, P.messageKey: cmdStr or "" }
 			self.sendPlistPacket(packet)
@@ -65,7 +65,7 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 		if self.__open:
 			self.__open = False
 			packet = { P.packetTypeKey: P.closeConnectionPacket }
-			if message != None:
+			if message is not None:
 				# msgStr = message.decode('ascii') if isinstance(message, bytes) else message
 				msgStr = message.decode('utf-8') if isinstance(message, bytes) else message
 				packet[P.messageKey] = msgStr
@@ -83,18 +83,19 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 	
 	def hasConfigurationValue(self, key):
 		return key in self.__configuration
-	
-	
+
+
 	def setConfigurationValue(self, key, value):
-		if self.__open and (not hasattr(self.__configuration, key) or self.__configuration[key] != value):
-			packet = { P.packetTypeKey: P.noteConfigurationChangePacket }
+		if self.__open and self.__configuration.get(key) != value:
+			packet = {P.packetTypeKey: P.noteConfigurationChangePacket}
 			# packet = { P.packetTypeKey: P.noteConfigurationPacket } # these types of packets are receive only
-			if value != None:
-				packet[P.configurationKey] = { key: value }
+			if value is not None:
+				packet[P.configurationKey] = {key: value}
 			else:
 				packet[P.removedConfigurationKeysKey] = [key]
 			self.sendPlistPacket(packet)
-	
+
+
 	# Internals beyod this point
 	def connectionMade(self):
 		self.delegate = self.factory.delegateClass(self)
@@ -112,30 +113,30 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 		
 	def plistPacketReceived(self, packet):
 		# Dispatch based on packet type.
-		type = packet[P.packetTypeKey]
-		if type == P.requestConnectionPacket:
+		_type = packet[P.packetTypeKey]
+		if _type == P.requestConnectionPacket:
 			self.__requestConnectionPacket(packet)
-		elif type == P.closeConnectionPacket:
+		elif _type == P.closeConnectionPacket:
 			self.__closeConnectionPacket(packet)
-		elif type == P.consoleOutputPacket:
+		elif _type == P.consoleOutputPacket:
 			self.__consoleOutputPacket(packet)
-		elif type == P.clearConsolePacket:
+		elif _type == P.clearConsolePacket:
 			self.__clearConsolePacket(packet)
-		elif type == P.showConsolePacket:
+		elif _type == P.showConsolePacket:
 			self.__showConsolePacket(packet)
-		elif type == P.noteConfigurationPacket:
+		elif _type == P.noteConfigurationPacket:
 			self.__noteConfigurationPacket(packet)
-		elif type == P.noteConfigurationChangePacket:
+		elif _type == P.noteConfigurationChangePacket:
 			self.__noteConfigurationChangePacket(packet)
-		elif type == P.pingPacket:
+		elif _type == P.pingPacket:
 			self.__pingPacket(packet)
-		elif type == P.pongPacket:
+		elif _type == P.pongPacket:
 			self.__pongPacket(packet)
 		else:
-			self.__unknownPacket(type, packet)
+			self.__unknownPacket(_type, packet)
 	
 	
-	def DebugConsole(self, data):
+	def badPacketReceived(self, data):
 		consoleLogger.warning("Received bad packet, ignoring.")
 		consoleLogger.debug(data)
 	
@@ -150,6 +151,7 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 			response = { P.packetTypeKey: P.rejectConnectionPacket, P.messageKey: "This console does not support the requested protocol version." }
 			self.sendPlistPacket(response)
 			self.transport.loseConnection()
+			# noinspection PyBroadException
 			try:
 				self.delegate.connectionClosed("This console does not support the requested protocol version.")
 			except:
@@ -159,8 +161,8 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 			# Handle connection request
 			try:
 				if self.delegate.acceptConnection():
-					response = { P.packetTypeKey: P.approveConnectionPacket }
-					response[P.consoleIdentityKey] = self.delegate.identityString
+					response = {P.packetTypeKey: P.approveConnectionPacket,
+								P.consoleIdentityKey: self.delegate.identityString}
 					self.sendPlistPacket(response)
 					# Pass to delegate
 					self.delegate.connectionOpened(packet[P.ooliteVersionKey])
@@ -172,7 +174,7 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 				consoleLogger.error("Failed to open connection.")
 				# No delegate or delegate failed -> reject connection.
 				response = { P.packetTypeKey: P.rejectConnectionPacket, P.messageKey: "This console is not accepting connections." }
-				if self.rejectMessage != None:
+				if self.rejectMessage is not None:
 					response[P.messageKey] = self.rejectMessage
 				self.sendPlistPacket(response)
 				self.transport.loseConnection()
@@ -229,8 +231,13 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 					self.__configuration[k] = v
 			if P.removedConfigurationKeysKey in packet:
 				for k in packet[P.removedConfigurationKeysKey]:
-					del self.__configuration[k]
-	
+					try:
+						del self.__configuration[k]
+					except Exception as exc:
+						if isinstance(exc, KeyError):
+							print('key {!r} not found in __configuration'.format(k),
+								  file=sys.stderr)
+
 	
 	def __pingPacket(self, packet):
 		# Respond to ping packet by sending back pong packet with same message (if any).
@@ -245,6 +252,7 @@ class OoliteDebugConsoleProtocol (PropertyListPacketProtocol):
 		pass
 	
 	
-	def __unknownPacket(self, type, packet):
+	def __unknownPacket(self, _type, packet):
 		#unknown packet, complain.
-		consoleLogger.error('Unkown packet type "{}", ignoring.'.format(type))
+		consoleLogger.error('Unkown packet type "{}", ignoring.'.format(_type))
+		consoleLogger.debug(packet)

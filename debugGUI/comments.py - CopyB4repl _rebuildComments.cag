@@ -1,0 +1,1745 @@
+# -*- coding: utf-8 -*-
+#
+# (c) 2021 cag CC BY-NC-SA 4.0
+#
+
+# import sys
+# _Python2 = sys.version_info[0] == 2
+# if _Python2:
+# 	from itertools import chain
+# 	from itertools import izip_longest as zip_longest
+# else:
+# 	from itertools import chain, zip_longest
+
+import re
+from operator import attrgetter, itemgetter
+
+import debugGUI.constants as con
+import debugGUI.globalVars as gv
+import debugGUI.miscUtils as mu
+import debugGUI.stringUtils as su
+import debugGUI.regularExpn as rx
+
+import pdb
+import traceback
+
+def stripJSchars(string, start=0, stop=None):
+	if stop is None:
+		stop = len(string)
+	return ''.join(rx.STRIP_JS_ADDED_RE.findall(string, start, stop))
+
+def jsCharSpans(string, start=0, stop=None):
+	if stop is None:
+		stop = len(string)
+	return [gv.TextSpan(st.start('stripped'), st.end('stripped'), st['stripped'])
+			for st in rx.STRIP_JS_ADDED_RE.finditer(string, start, stop)]
+
+# def findInStripped(cmt, obj):
+# 	try:
+# 		if not obj.stripSpans or len(obj.stripSpans) == 0:
+# 			print('findInStripped, missing .stripSpans in obj')
+# 			traceback.print_stack(limit=8)
+# 			pdb.set_trace()
+#
+# 		comment = cmt.text
+# 		strSpans = rx.STRIP_JS_ADDED_RE.findall(comment)
+# 		starts = [idx for idx, spanned in enumerate(obj.stripSpans)
+# 					if strSpans[0] in spanned.text]
+# 		found = []
+# 		stripped = ''.join(strSpans)
+# 		sLen, spansLen = len(strSpans), len(obj.stripSpans)
+# 		for index in starts:
+# 			groupStr = ''.join(obj.stripSpans[x].text
+# 							   for x in range(index, min(spansLen, index + sLen)))
+# 			if stripped in groupStr:
+# 				found.append((obj.stripSpans[index:index + sLen], index))
+#
+# 		if len(found) == 1:
+# 			return found[0]
+# 		elif len(found) == 0:
+# 			print('findInStripped, failed to locate all parts of "{!r}" in \n  "{}"'
+# 				  .format(comment, ', '.join(repr(st) for _, _, st in obj.stripSpans)))
+# 			if con.CAGSPC:
+# 				pdb.set_trace()
+# 		else:	# use closest to offset
+# 			closest = min([abs(cmt.offset - group[0].start), group, idx]
+# 						  for group, idx in found)
+# 			closest.pop(0)
+# 			return closest
+# 	except Exception as exc:
+# 		print(exc)
+# 		traceback.print_exc()
+# 		pdb.set_trace()
+
+def findInStripSpans(cmt, obj):
+	try:
+		objSpanLen = len(obj.stripSpans) if obj.stripSpans else -1
+
+		if objSpanLen <= 0: ##
+			print('findInSpans, missing .stripSpans in obj')
+			traceback.print_stack(limit=8)
+			pdb.set_trace()
+
+		cmtLen = len(cmt.spans)
+		first = cmt.spans[0].text
+		starts = [idx for idx, spanned in enumerate(obj.stripSpans)
+					if first in spanned.text]
+		found = []
+		for index in starts:
+			group = []
+			for count in range(cmtLen):
+				objIdx = index + count
+				if objIdx >= objSpanLen:
+					break
+				oSpan = obj.stripSpans[objIdx]
+				if cmt.spans[count].text not in oSpan.text:
+					break
+				group.append(oSpan)
+			if len(group) == cmtLen:
+				found.append((group, index))
+
+		if len(found) == 1:
+			return found[0]
+		elif len(found) == 0:
+			print('findInSpans, failed to locate all parts of {!r} in \n  "{}"'
+				  .format(cmt.text, ', '.join(repr(st) for _, _, st in obj.stripSpans)))
+			if con.CAGSPC:
+				pdb.set_trace()
+		else:	# use closest to offset
+			closest = min([abs(cmt.offset - group[0].start), group, idx]
+						  for group, idx in found)
+			closest.pop(0) # remove calculated difference
+			return closest
+	except Exception as exc:
+		print(exc)
+		traceback.print_exc()
+		pdb.set_trace()
+
+def _addCommentContext(obj):
+	"""once alias definition read is complete,
+	   add context for any comments"""
+
+	try:
+
+		if obj is None or obj.cmtSpans is None or len(obj.comments) == 0:
+			return
+		defn = obj.defn
+		dLen = len(defn)
+		cmtPosn = -1
+		cmtFree = invertCmtSpans(obj.cmtSpans, len(obj.defn), obj.iifeArgsSpan)
+
+		obj.stripSpans = jsCharSpans(defn)
+		obj.miniDefn = stripJSchars(defn)
+		obj.miniNoCmtDefn = stripJSchars(stripComments(defn, obj))
+
+		for cmt in obj.comments:
+			comment, offset = cmt.text, cmt.offset
+			cmt.spans = jsCharSpans(comment)
+			cLen = len(comment)
+			right = min(dLen, offset + 2 * cLen)
+			lSearch = defn.rfind(comment, 0, right)
+			left = max(0, offset - 2 * cLen)
+			rSearch = defn.find(comment, left, dLen)
+
+			if -1 < rSearch <= lSearch:
+				# both found, pick closest to .offset in case there are dups
+				cmtPosn = lSearch if abs(offset - lSearch) \
+								   < abs(offset - rSearch) else rSearch
+			elif lSearch == rSearch < 0:		# neither found!!? bail
+				continue
+			elif lSearch < 0:					# only found > .offset
+				cmtPosn = rSearch
+			elif rSearch < 0:					# only found < .offset
+				cmtPosn = lSearch
+
+			# print(repr(comment))
+			# pdb.set_trace()
+
+			# prefix includes previous comments as are restored left to right
+			found = findInStripSpans(cmt, obj)
+			if not found:
+				# cmt.prefix = None
+				# cmt.suffix = None
+				if cmt.context:
+					del cmt.context
+
+					print('_addCommentContext, just deleted context; inspect cmt')
+					print(cmt)
+					pdb.set_trace()
+
+				continue
+
+			group, foundAt = found
+			# group is list of spans containing comment
+			# ?save group in Context too
+			# foundAt is index in obj.stripSpans of start of comment
+			firstStart = obj.stripSpans[foundAt].start	# of first match
+			# cmt.firstSpan = foundAt ## not sure which I'll use
+			# cmt.spans = group		##  "
+			# cmt.prefix = len(stripJSchars(defn, 0, firstStart)) ## mk stripJSchars of defn and have prefix be index, ie. firstStart
+			cmt.context = gv.Context(obj, foundAt, min(len(obj.stripSpans) - 1,
+													   foundAt + len(group)))
+
+			closest = 0 if foundAt == 0 else \
+					 obj.stripSpans[foundAt - 1].end # of previous match
+			skipped = defn[closest:firstStart]
+
+			if any(ch not in con.JS_ADDED_CHARS for ch in skipped):
+				print('invalid char in skipped',repr(skipped))
+				print(f'closest: {closest}, skipped: {skipped!r}')
+				pdb.set_trace()
+
+			if len(skipped):
+				# cmt.prefixSkip = TextRun(closest, skipped)
+				# cmt.context.priorSkip = gv.TextRun(closest, skipped)
+				cmt.context.priorSkip = gv.TextSpan(closest, firstStart, skipped)
+
+			continue
+
+
+			# # behind = defn[:cmtPosn]
+			# # nonJSstrs = [(st.end('stripped'), st['stripped'])
+			# # 			for st in rx.STRIP_JS_ADDED_RE.finditer(behind)]
+			# # if len(nonJSstrs):
+			# # 	closest = nonJSstrs[-1][0] # .end() of last match
+			# # 	skipped = defn[closest:cmtPosn]
+			# #
+			# # 	if any(ch not in con.JS_ADDED_CHARS for ch in skipped):
+			# # 		print('invalid char in skipped',repr(skipped))
+			# # 		pdb.set_trace()
+			# #
+			# # 	prefix = ''.join(string for end, string in nonJSstrs)
+			# # 	prefix = getNextUnique(prefix, -1)
+			# # 	cmt.prefix = prefix
+			# # 	obj.contexts[prefix] = TextRun(closest, skipped)
+			# # else:
+			# # 	cmt.prefix = ''
+			#
+			# suffixStart = cmtPosn + cLen
+			# # suffix must ignore comments as they will be absent during insertion
+			# noCmtStr = textFromInvertedSpans(defn, cmtFree, startAt=suffixStart)
+			# # cmt.suffix = len(obj.miniNoCmtDefn) - len(stripJSchars(noCmtStr)) ## mk stripJSchars of stripped defn and have suffix be index
+			# cmt.suffix = foundAt + len(cmt.spans)
+			# Context(cmt, foundAt, foundAt + len(group))
+			#
+			# print(cmt)
+			# print('noCmtStr',noCmtStr)
+			# pdb.set_trace()
+			#
+			# after = rx.STRIP_JS_ADDED_RE.search(noCmtStr)
+			# if after:
+			# 	closest = after.start('stripped')
+			# 	skipped = noCmtStr[:closest]
+			# 	if len(skipped):
+			# 		obj.suffixSkip = TextRun(suffixStart + closest, skipped)
+			#
+			# 	if any(ch not in con.JS_ADDED_CHARS for ch in skipped):
+			# 		print('invalid char in skipped',repr(skipped))
+			# 		print(f'closest: {closest}, skipped: {skipped!r}, strippedStr: {noCmtStr!r}')
+			# 		pdb.set_trace()
+
+	except Exception as exc:
+		print(exc)
+		traceback.print_exc()
+		pdb.set_trace()
+
+def _locateMatch(string, start, step, end, matched, context):
+	# we found that context exists in string but not exactly where it starts
+	# - there is no one-to-one correlation, so we check all occurences of
+	# the anchor character by reducing its portion of string
+
+	letter = context[0] if step > 0 else context[-1]
+	if matched.count(letter) == 1:
+		return string.find(letter, start) if step > 0 \
+			else min(len(string), string.rfind(letter, 0, end) + 1)
+
+	# only compiled re's have pos, endpos as args to findall/finditer
+	regex = re.compile(re.escape(letter))	### memoize
+	# print(f'start: {start}, end: {end}, step: {step}, matched: {matched!r}, context: {context!r}')
+	# print(f'  string: {string[start:end]!r}, place letter {letter!r}')
+	if step > 0:
+		indices = [st.start() for st in regex.finditer(string, start, end)]
+		# print(f'  indices: {indices}: {string[start:end]!r}')
+		for index in indices:
+			stripped = ''.join(st['stripped']
+				for st in rx.STRIP_JS_ADDED_RE.finditer(string, index, end))
+			# print(f'    index: {index}, stripped: {stripped!r}, .startswith("{context}"): {stripped.startswith(context)}')
+			# pdb.set_trace()
+			if stripped.startswith(context):
+				return index
+	else:
+		indices = [st.end() for st in regex.finditer(string, start, end)]
+		# print(f'  indices: {indices}: {string[start:end]!r}')
+		for index in reversed(indices):
+			stripped = ''.join(st['stripped']
+				for st in rx.STRIP_JS_ADDED_RE.finditer(string, start, index))
+			# print(f'    index: {index}, stripped: {stripped!r}, .endswith("{context}"): {stripped.endswith(context)}')
+			# print(f' {string[max(0, index-22):index]} {string[index]} {string[index:min(len(string), index+22)]}')
+			# pdb.set_trace()
+			if stripped.endswith(context):
+				return index
+	return -1
+
+_DOUBLE_OPEN_PAREN_RE = re.compile(r'[(]\s*[(]')
+# don't reduce double closing parentheses in an iife
+_DOUBLE_CLOSE_PAREN_RE = re.compile(r'[)]\s*[)](?=[^(]|[)][)][(][)]$)')
+
+# noinspection PyBroadException
+def _findContext(obj, defn, cmt, step):
+	"""locate context (either cmt.prefix or cmt.suffix_ within 'defn',
+	   starting at its .offset, in direction given by 'step'
+		NB: context is stripped of any char in con.JS_ADDED_CHARS"""
+
+	try:
+		context = obj.miniDefn[:cmt.prefix] if step < 0 \
+			 else obj.miniNoCmtDefn[cmt.suffix:]
+		dLen, cLen = len(defn), len(context)
+		if cLen == 0:
+			return -1
+		# miniDefn = stripJSchars(defn) if step < 0 \
+		# 	else stripJSchars(stripComments(defn))
+		stripSpans = jsCharSpans(defn)
+		stripped = ''.join(st.text for st in stripSpans)
+## opt'n: mk miniDefn & miniNoCmtDefn for new defn in _rebuildComments & pass re: step
+
+		# TextRun tuple saved when adding context
+		if step > 0:
+			idx, text = cmt.suffixSkip if cmt.suffixSkip else -1, ''
+		else:
+			idx, text = cmt.prefixSkip if cmt.prefixSkip else -1, ''
+		# NB: idx is where we found context and points to 'end' of skipped
+
+		# allStripped = obj.miniDefn if step < 0 else obj.miniNoCmtDefn
+
+		# if context not in stripped:
+		# 	# JS .toString will remove redundant parentheses
+		# 	count = context.count('(')
+		# 	single = _DOUBLE_OPEN_PAREN_RE.sub('(', context)
+		# 	single = _DOUBLE_CLOSE_PAREN_RE.sub(')', single)
+		# 	if single in stripped:
+		# 		context = single
+		# 	else:
+		# 		print('_findContext, single not found: \n{}\n in stripped:\n{}'
+		# 			  .format(single, stripped))
+		# 		pdb.set_trace()
+		#
+		# if context not in stripped:
+		# 	print('_findContext, context not found: \n{}\n in stripped:\n{}'
+		# 		  .format(context, stripped))
+		# 	pdb.set_trace()
+
+		# cmt.firstSpan = foundAt ## not sure which I'll use
+		#  - is index into obj.stripSpans
+		# cmt.spans = group		##  "
+		#  - is list of span elemets that comprise the comment, starting w/ firstSpan
+		#    ?can we search for it
+		# - we could use firstSpan for initial attempt to match context,
+		#   add/delete stripSpans as needed
+		# - we could find all spans in group, then those that are adjacent and
+		#   if dup'd, closest to .offset
+
+		# => we're doing reverse of addContext in that we're trying to find offset
+		#    that will yield context (vs saving offset for context)
+		#    NB: obj's attr values apply to defn before registration
+
+		oSpanLen = len(obj.stripSpans)
+		spLen = len(cmt.spans)
+
+		# if step > 0:
+## do not know where to start, when defn supplied by .toString
+		# 	spans = jsCharSpans(defn, obj.stripSpans[cmt.firstSpan].end)
+		# else:
+		# 	spans = jsCharSpans(defn, 0, obj.stripSpans[cmt.firstSpan].start)
+		# spanStr = ''.join(sp.text for sp in spans)
+		# # while sum(len(sp.text) for sp in spans) > cmt.prefix:
+		# # 	spans.pop(0 if step > 0 else None)
+		# # while sum(len(sp.text) for sp in spans) < cmt.prefix:
+		# # 	index = obj.stripSpans.index(spans[-1])
+		# # 	if -1 < index < oSpanLen:
+		# #		nextSpan = obj.stripSpans[index + 1]
+		# #		if step > 0:
+		# #			spans.insert(0, nextSpan)
+		# #		else:
+		# # 			spans.append(nextSpan)
+		# # 	else:
+		# # 		break
+		# try:
+		# 	assert spanStr == context
+		# except:
+		# 	print('context',context)
+		# 	print('  spans',spanStr)
+		# 	pdb.set_trace()
+
+		first = cmt.spans[0].text
+		starts = [(idx, span) for idx, span in enumerate(stripSpans)
+				  if span.text == first]
+		found = []
+		for idx, span in starts:
+			group = []
+			for count in range(spLen):
+				osIdx = idx + count
+				if osIdx >= oSpanLen:
+					break
+				oSpan = obj.stripSpans[osIdx]
+				if cmt.spans[count].text != oSpan.text:
+					break
+				group.append(oSpan)
+			if len(group) == spLen:
+				found.append(group)
+		try:
+			assert len(found) == 1
+		except:
+			print('context',context)
+			pdb.set_trace()
+
+		pdb.set_trace()
+
+
+	except Exception as exc:
+		print(exc)
+		traceback.print_exc()
+		pdb.set_trace()
+
+def __findContext(obj, defn, cmt, step):
+	"""locate context (either cmt.prefix or cmt.suffix_ within 'defn',
+	   starting at its .offset, in direction given by 'step'
+		NB: context is stripped of any char in con.JS_ADDED_CHARS"""
+
+	def _fineTune(index, offset, skipped):
+		"""adjust 'index' to account for chars skipped when adding context
+		   .toString can add or remove whitespace"""
+
+		# NB: offset is where we found context and points to 'end' of skipped
+		sLen = len(skipped)
+		if skipped is None or sLen == 0:
+			return index
+		num = 0 if step < 0 else sLen - 1
+
+		# print(cmt)
+
+		# if step > 0 and defn.startswith(skipped, index - sLen + 1):
+		# 	return index - sLen + 1
+		# if step < 0 and defn.endswith(skipped, index):
+		# 	return index + sLen
+		## test later
+
+		# when setting context, characters in JS_ADDED_CHARS were skipped, as
+		# JavaScript may insert/delete them
+		# Here, we adjust index to account for them if present
+		while su.inbounds(num, skipped) and su.inbounds(index, defn):
+
+			# print('  {} "{}", num: {}, skipped: {}>{}<{} index: {}: {!r}>{!r}<{!r}'.format(
+			# 		step, obj.name, num,
+			# 		'' if num <= 0 else repr(skipped[max(0, num-sLen):num]),
+			# 		'' if (sLen <= 1 and num != 0) or not -1<num<sLen else repr(skipped[num]),
+			# 		'' if num+1 >= sLen else repr(skipped[min(sLen, num+1):min(sLen, num+sLen)]),
+			# 		index,defn[max(0, index-22):index], defn[index],
+			# 		defn[min(len(defn), index+1):min(len(defn), index+22)]))
+			# pdb.set_trace()
+
+			if defn[index] == skipped[num]:		# found one skipped, move past it
+				num -= step
+				index -= step
+			elif skipped[num] in con.JS_ADDED_CHARS: # .toString removed
+				num -= step
+			elif defn[index] in con.JS_ADDED_CHARS: # toString added
+				index -= step
+			elif con.CAGSPC:
+				print('_fineTune, step: {}, posn: {}, index: {}, offset: {}, num: {}: {}'
+					  .format(step, posn, index, offset, num,
+							  '{!r} >{}< {!r}'.format(skipped[max(0, num-8) :num], skipped[num],
+													  skipped[num+1 : min(sLen, num+8)])))
+				print('  match failed: {!r} >{}< {!r}'.format(
+						defn[max(0, index-30) : index], defn[index],
+						defn[min(len(defn), index+1) : min(dLen, index+30)]))
+				pdb.set_trace()
+			else:
+				break
+			# noinspection PyChainedComparisons
+			if step > 0 and num < 0:
+				# resume will utilize character at index
+				index += step
+				break
+			if step < 0 and num >= sLen:
+				# insert will ignore character at index
+				break
+
+		# print('exit "{}", num: {}, skipped: {}>{}<{} index: {}: {!r}>{!r}<{!r}'.format(
+		# 		obj.name, num,
+		# 		'' if num <= 0 else repr(skipped[max(0, num-sLen):num]),
+		# 		'' if (sLen <= 1 and num != 0) or not -1<num<sLen else repr(skipped[num]),
+		# 		'' if num+1 >= sLen else repr(skipped[min(sLen, num+1):min(sLen, num+sLen)]),
+		# 		index,defn[max(0, index-22):index], defn[index],
+		# 		defn[min(len(defn), index+1):min(len(defn), index+22)]))
+		# pdb.set_trace()
+
+		return index
+
+	def _catLoop(target, blocks):
+		# bracket context location by extending the end of the search followed by
+		# moving forward the start (context will likely span a few nonJSstrs and
+		# may not align on either end
+
+		catenation = ''
+		end = None
+		for index in range(len(blocks)):
+			catenation += blocks[index][2]
+			if target in catenation:
+				end = blocks[index][1]
+				break
+		start = test = skip = 0
+		for index in range(len(blocks)):
+			if -1 < catenation.find(target, test):
+				start = blocks[index][0]
+				skip = test
+				test += len(blocks[index][2])
+			else:
+				break
+		return catenation[skip:], start, end
+
+	context = cmt.prefix if step < 0 else cmt.suffix
+	dLen, cLen = len(defn), len(context)
+	if context is None or cLen == 0:
+		return -1
+	nonJSstrs = [(st.start('stripped'), st.end('stripped'), st['stripped'])
+					for st in rx.STRIP_JS_ADDED_RE.finditer(defn)]
+	# TextRun tuple saved when adding context
+	idx, text = cmt.prefixSkip if step < 0 else cmt.suffixSkip
+	# NB: idx is where we found context and points to 'end' of skipped
+	allStripped = ''.join(non for start, end, non in nonJSstrs)
+
+	if context not in allStripped:
+		# JS .toString will remove redundant parentheses
+		if '((' in context or '))' in context:
+			single = context.replace('((', '(').replace('))', ')')
+			if single in allStripped:
+				context = single
+	elif allStripped.count(context) > 1:	# use closest
+		try:
+			foundDup = 0
+			dups = []
+			while True:
+				testSpace = [(start, end, non) for start, end, non in nonJSstrs
+												if start >= foundDup]
+				testing, start, end = _catLoop(context, testSpace)
+				if context not in testing: # if end is None
+					break
+				elif testing.count(context) > 1:
+					print('need to break up into bite sized chuncks')
+					pdb.set_trace()
+				dups.append((abs(cmt.offset - start), start))
+				foundDup = end
+
+			# simple minimum is not enough; losing info via abs()
+			# eg. "yard" cmt after "shipPrice = shipPrice + upPrice;", cmt.offset is 2234
+			#     it finds 2 suffix's at 2208 & 2258 -----------------------\/----------\/
+			# dups: [(1179, 1055), (1029, 1205), (741, 1493), (695, 1539), (26, 2208), (24, 2258)]
+
+			# offsetChange, toStringChg == (8, -162), at start of loop; no help
+			# what happens if we add len(comment) as we go:
+			# -162, -104, -84, -51, -4, 80, 172, 235, 299, 353; again, no help
+			# starts at -162, which is what .toString did (dLen - obj.strippedSize); initial defn much shorter
+			# comments total 683; 507 up to this comment
+
+			# - a larger CONTEXT_RADIUS would fix it (only need a few more char) but how
+			#   do we generalize (largest token, 2 special char, 3 when 2 are at ends
+			# 20 works
+
+			# what if we save allStripped and each comment has index to its position
+			# - only process w/ re once
+			# - no ambiguity as not searching for stripped strings
+			# ?how to find insertion point:
+			# - roughly, % before/after, then find local
+			#  region from allStripped before .toString,
+			# - vs extract prefix/suffix from allStripped and .find; if more than
+			#   one, incr. size of substr being searched
+			#   - mk generic fns for extraction, locating substrs
+			#     and use same methods for adding context & finding posn in .toString return
+
+
+
+			closest = min(dups)[1]
+			# include previous entry too, in case context crosses elements
+			# ie. those w/ end >= closest, not just start >= closest
+			nonJSstrs = [(start, end, non) for start, end, non in nonJSstrs
+						 if end >= closest]
+
+			if obj.name == 'yard' and 'costs of extra equipment' in cmt.text:
+				print(cmt)
+				print('\n.',nonJSstrs)
+				print('dups',dups)
+				print(f'"{obj.name}", at {cmt.offset}, step: {step}, {allStripped.count(context)} '
+					  f'dups, closest: {closest}, context: {context!r}, text: {cmt.text!r}')
+				pdb.set_trace()
+		except Exception as exc:
+			print(exc)
+			traceback.print_exc()
+			pdb.set_trace()
+
+	# 3 stages:
+	# - find members of nonJSstrs that enclose context (_catLoop()), 
+	# - find where inside the first/last block it starts/ends, 
+	#   depending on step (_locateMatch)
+	# - adjust the start to account for any 'skipped' when making 
+	#   context (_fineTune)
+	# ? what do do if characters are removed (like redundant parentheses)
+
+	#?poss, as we have obj, to remember last call, so not always start at 0
+
+	searching, start, end = _catLoop(context, nonJSstrs)
+	if end is None: # _catLoop failed to find context
+		if step > 0: # hope the prefix hit
+			return -1
+		print(f'_catLoop failed to find context {context!r}')
+		pdb.set_trace()
+		_catLoop(context, nonJSstrs)
+
+	# print(f'\n{"suffix" if step > 0 else "prefix"}, comment: {cmt.text!r}, '
+	# 	  f'context: {context}\n    searching: {searching}')
+
+	# refine endpoint as likely not on block boundary
+	firstAt = _locateMatch(defn, start, 1, end, searching, context)
+	lastAt = _locateMatch(defn, start, -1, end, searching, context)
+
+	if firstAt < 0 or lastAt < 0:
+		print(f'firstAt: {firstAt}, lastAt: {lastAt}')
+		pdb.set_trace()
+
+	# print(f' fine match, firstAt: {firstAt}, lastAt: {lastAt} '
+	# 	  f'=> {defn[firstAt:lastAt]!r}')
+
+	if step > 0:
+		found = firstAt
+		if text and len(text) > 0:
+			# _fineTune expects as 1st arg (index) an offset valid for subscription
+			found = _fineTune(max(0, found - 1), idx, text)
+			# print(f'_fielifeTune(found: {firstAt}, idx: {idx}, text: {text!r}) => {found}')
+	else:
+		found = lastAt
+		if text and len(text) > 0:
+			# _fineTune expects as 1st arg (index) an offset valid for subscription
+			found = _fineTune(min(dLen - 1, found + 1), idx, text)
+			# print(f'_fineTune(found: {lastAt}, idx: {idx}, text: {text!r}) => {found}')
+	# print(f'  returning {found}: {defn[max(0, found-22):found]!r}<|{cmt.text!r}|>{defn[found:min(dLen, found+22)]!r}\n')
+	return found
+
+def _findCommentType(string):
+	dblSlash, slashStar = string.find('//'), string.find('/*')
+	isInline = -1 == dblSlash < slashStar or -1 < slashStar < dblSlas
+	isEol = -1 == slashStar < dblSlash or -1 < dblSlash < slashStar
+	return isInline, isEol
+
+def _rebuildComments(obj, defn):
+	try:
+		defn = defn.expandtabs(con.CFG_TAB_LENGTH)
+		if obj.type == 'iife':
+			defn = '({})({})'.format(
+					defn, obj.iifeArgs if obj.iifeArgs else '')
+		if not obj.comments or len(obj.comments) == 0:
+			return defn
+		dLen = len(defn)
+		defnSpans, defnSpanNum, defnIdx = jsCharSpans(defn), 0, 0
+		prevSpans, prevSpanNum = obj.stripSpans, 0
+		newSpans, newSpansLen = [], 0
+		newDefn, newDefnIdx = '', 0
+		spanToCmt = {span: cmt for cmt in obj.comments for span in cmt.spans}
+		# use preSpans as template to insert comment spans into defn
+		# - all we need to is find where cmt goes and insert it
+		# - first interleave defnSpans w/ cmtSpans using prevSpans
+		# - don't lose any info as comment .start & .end still valid
+
+		def rptSpan(spans):
+			return ', '.join('{}: {!r}'.format(x,sp.text) for x,sp in enumerate(spans))
+		cmtSpanCount = 0
+		for cmt in obj.comments:
+			start, stop = cmt.context.indices
+			# - these include previously added comments
+			nextDefnIdx = start - cmtSpanCount
+			if defnIdx <= nextDefnIdx:
+				# add other spans
+				numSpans = nextDefnIdx - defnIdx
+				if nextDefnIdx > 0:  # + 1 as span may be shared
+					numSpans += 1
+				newSpans.extend(defnSpans[defnIdx:defnIdx + numSpans])
+				defnIdx += numSpans
+			# add comment spans
+			newSpans.extend(cmt.spans)
+			cmtSpanCount += len(cmt.spans)
+
+		inComment = False
+		defnIdx = nextDefnIdx = 0
+		cmtSpanCount = 0
+		for span in newSpans:
+			if not inComment and span in spanToCmt: # starting comment
+				cmt = spanToCmt[span]
+				cmtSpanCount = len(cmt.spans) - 1
+				skipped = cmt.context.priorSkip.text
+				print('\nskipped:',repr(skipped))
+				flush = [ch for ch in skipped
+						 if ch in con.JS_ADDED_CHARS and ch not in con.WHITESPACE]
+				# advance nextDefnIdx to account for priorSkip
+				if len(flush) > 0:
+					nextNonJS = su.leadingWS(defn, nextDefnIdx, WS=con.JS_ADDED_CHARS)
+					print('flush: {!r}, nextNonJS: {!r}'.format(''.join(ch for ch in flush), nextNonJS))
+					if nextNonJS > 0:
+						flushCount = 0
+						flushStart = nextDefnIdx
+						print('comingJSChars',repr(defn[nextDefnIdx:nextDefnIdx + nextNonJS]))
+						while flushCount < len(flush):
+							flushChar = flush[flushCount]
+							flushIdx = defn.find(flushChar, flushStart, nextDefnIdx + nextNonJS)
+							print('flushChar',repr(flushChar))
+							if -1 < flushIdx:
+								print('nextDefnIdx {} => {}: {!r}'.format(
+										nextDefnIdx, flushIdx + 1,
+										defn[flushIdx + 1:flushIdx + 1 +33]))
+								nextDefnIdx = flushIdx + 1 # + 1 to include flushChar
+								flushCount += 1
+							else:
+								print('flushChar {!r} not found in comingJSChars {!r}'
+									  .format(flushChar,defn[nextDefnIdx:nextDefnIdx + nextNonJS]))
+								pdb.set_trace()
+					else:
+						print('cannot flush skipped: {!r}'.format(skipped))
+						pdb.set_trace()
+
+				# context = skipped + cmt.context.text
+				strippedCmt = ''.join(sp.text for sp in cmt.spans)
+				cmtInContext = stripJSchars(cmt.context.text).find(strippedCmt)
+				print('context: {!r}, nextText: {!r}, cmtInContext: {}, -1 < cmtInContext: {}'
+					  .format(cmt.context.text, defn[defnIdx:nextDefnIdx], cmtInContext, -1 < cmtInContext))
+				cmtEndsLine = su.endsLine(cmt.text)
+				if -1 < cmtInContext:
+					context = cmt.context.text
+					testFrom, insertAt = defnIdx, nextDefnIdx
+					if strippedCmt not in context:
+						print('comment not found in context, : {!r}, : {!r}'.format(strippedCmt, context))
+						pdb.set_trace()
+					# context may contain some characters already added to end of newDefn
+					# but usually not.  we back up starting point if those characters
+					# are present near the end of newDefn to forstall insertion failure below
+
+					if 'pre Args' in cmt.text:
+						pdb.set_trace()
+					## crap, it's a mixture, 2 char from end of newDefn '*/' and 1st char
+					## not yet output (cmt to be inserted between ')' and '('
+					## - generalize search space
+					## - break up into fns
+
+					if len(newDefn) > 0 and not context.startswith(strippedCmt):
+						preceding = context[:context.index(strippedCmt)] ## switch to find to trap/avoid exceptions
+						if newDefn.strip().endswith(preceding[-1]):
+							preIdx = 0
+							while preIdx < len(preceding):
+								found = newDefn.rfind(preceding[preIdx])
+								if -1 < found:
+									backup = len(newDefn) - found
+									testFrom = max(0, defnIdx - backup)
+									break
+								preIdx += 1
+					# remove any subsequent comment fragments as they've not been added
+					# - only occurs w/ 2 comment very close together
+					search = rx.COMMENT_START_RE.search(context, context.index(strippedCmt) + len(strippedCmt))
+					if search:
+						context = context[:search.start('fragment')]
+						print('context',context)
+					# roll back nextDefnIdx to account for characters skipped
+					while insertAt >= defnIdx:
+						test = defn[testFrom:insertAt] + cmt.text + defn[insertAt:]
+						testing = stripJSchars(test)
+						if context in testing:		# found placement
+							break
+						insertAt -= 1
+						if insertAt < defnIdx:
+							print('insertion failed')
+							pdb.set_trace()
+					newDefn += defn[defnIdx:insertAt] + cmt.text
+					if -1 < cmtEndsLine:
+						nextStartsLine = su.startsLine(defn, insertAt)
+						print('cmtEndsLine: {}, nextStartsLine: {}'.format(cmtEndsLine, nextStartsLine))
+						# remove extra NL inserting comment will leave
+						if -1 < nextStartsLine:
+							print('  insertAt {} => {}'.format(insertAt, nextStartsLine + 1))
+							insertAt = nextStartsLine + 1
+							if insertAt > nextDefnIdx:
+								nextDefnIdx = insertAt
+					newDefn += defn[insertAt:nextDefnIdx]
+				else: # spans not shared
+					print('spans not shared, defnIdx: {}, nextDefnIdx: {}, cmtEndsLine: {}'.format(defnIdx, nextDefnIdx, cmtEndsLine))
+					if nextDefnIdx > defnIdx:
+						newDefn += defn[defnIdx:nextDefnIdx]
+					newDefn += cmt.text
+					if -1 < cmtEndsLine:
+						nextStartsLine = su.startsLine(defn, nextDefnIdx)
+						print('cmtEndsLine: {}, nextStartsLine: {}'.format(cmtEndsLine, nextStartsLine))
+						# remove extra NL inserting comment will leave
+						if -1 < nextStartsLine:
+							print('  nextDefnIdx {} => {}'.format(nextDefnIdx, nextStartsLine + 1))
+							nextDefnIdx = nextStartsLine + 1
+				defnIdx = nextDefnIdx
+
+				print('newDefn:',repr(newDefn[-44:]))
+				print('defnIdx: {}, nextDefnIdx: {} => {!r}'.format(defnIdx,nextDefnIdx,defn[defnIdx:nextDefnIdx]),cmt)
+				if 'pre Args' in cmt.text:
+					pdb.set_trace()
+				if 'post Args' in cmt.text:
+					pdb.set_trace()
+				inComment = True
+			elif span in spanToCmt:
+				cmtSpanCount -= 1
+				inComment = cmtSpanCount > 0
+			else:
+				inComment = False
+				lastSpanEnd = nextDefnIdx
+				nextDefnIdx = span.end
+
+		pdb.set_trace()
+		pdb.set_trace()
+		pdb.set_trace()
+
+		for cmt in obj.comments:
+			start, stop = cmt.context.indices
+			print(' newSpansLen: {} vs start: {}, stop: {}'.format(newSpansLen, start, stop))
+			if newSpansLen <= start:
+				# add other spans
+				count = start - newSpansLen
+				if start > 0:  # + 1 as span may be shared
+					count += 1
+				newSpans.extend(defnSpans[defnSpanNum:defnSpanNum + count])
+				print('other spans [{}:{}]: {!r}'.format(defnSpanNum, defnSpanNum + count,
+					'|'.join(sp.text for sp in defnSpans[defnSpanNum:defnSpanNum + count])))
+				defnSpanNum += count
+				newSpansLen += count
+
+			# add comment spans
+			newSpans.extend(cmt.spans)
+			print('  cmt spans:', '|'.join(sp.text for sp in cmt.spans))
+			count = len(cmt.spans)
+			newSpansLen += count
+
+			print(repr('|'.join(sp.text for sp in newSpans)))
+			# pdb.set_trace()
+
+		defnIdx = lastDefnIdx = spanIdx = 0
+		newDefn = ''
+		while defnIdx < len(defn):
+			lastSpanIdx = spanIdx
+			print('\n cmt, defnIdx: {}, lastDefnIdx: {}, spanIdx: {}, lastSpanIdx: {}, newSpans[{}] in spanToCmt: {}'
+				  .format(defnIdx, lastDefnIdx, spanIdx, lastSpanIdx, spanIdx, newSpans[spanIdx] in spanToCmt))
+			while newSpans[spanIdx] in spanToCmt:
+				spanIdx += 1
+			if spanIdx > lastSpanIdx:
+				cmtSpans = newSpans[lastSpanIdx:spanIdx]
+				cmts = list({spanToCmt[span] for span in cmtSpans})
+				for cmt in sorted(cmts, key=attrgetter('offset')):
+					isInline, isEol = _findCommentType(cmt.text)
+					cText = cmt.context.text
+					if isInline:
+						priorSkip = cmt.context.priorSkip
+						prefix = cText[:cText.find('/*')]
+						suffix = cText[cText.rfind('*/'):]
+						print('isInline, priorSkip: {!r}, prefix: {!r}, suffix: {!r}'.format(priorSkip, prefix, suffix))
+					else:
+						priorSkip = cmt.context.priorSkip
+						prefix = cText[:cText.find('//')]
+						suffix = cText[cText.rfind('\n'):]
+						print('isEol, priorSkip: {!r}, prefix: {!r}, suffix: {!r}'.format(priorSkip, prefix, suffix))
+## how to finalize position
+## eg. fn Args is between parentheses which is a single span
+					removed = ''
+					if newDefn.endswith(suffix):
+						removed = newDefn[-len(suffix):]
+						newDefn = newDefn[:-len(suffix)]
+					print('adding comment {!r}, {}'.format(cmt.text, cmt.context))
+					pdb.set_trace()
+					newDefn += cmt.text
+					if len(removed):
+						newDefn += removed
+			print('code, defnIdx: {}, lastDefnIdx: {}, spanIdx: {}, lastSpanIdx: {}, newSpans[{}] in spanToCmt: {}'
+				  .format(defnIdx, lastDefnIdx, spanIdx, lastSpanIdx, spanIdx, newSpans[spanIdx] in spanToCmt))
+			while newSpans[spanIdx] not in spanToCmt:
+				spanIdx += 1
+			if spanIdx > lastSpanIdx:
+				eoSpans = newSpans[spanIdx-1].end
+				newDefn += defn[lastDefnIdx:eoSpans]
+				print('   adding defn[{}:{}]: {!r}'.format(lastDefnIdx, eoSpans, defn[lastDefnIdx:eoSpans]))
+				lastDefnIdx = eoSpans
+			print(repr(newDefn))
+			pdb.set_trace()
+
+		pdb.set_trace()
+		pdb.set_trace()
+
+		cmtNum = 0
+		while prevSpanNum < len(prevSpans):
+			cmt = obj.comments[cmtNum]
+			start, stop = cmt.context.indices
+			print('\ncomment {!r}, start: {}, stop {}'.format(cmt.text, start,stop))
+			group, priorSkip = cmt.context.group, cmt.context.priorSkip
+			print(' priorSkip: {}, group: {}'.format(priorSkip, group))
+			count = defnSpanNum
+			print('does prev {!r} match defn {!r}'.format( prevSpans[prevSpanNum].text, defnSpans[count].text))
+			while prevSpans[prevSpanNum].text == defnSpans[count].text:
+				# newSpans.append(defnSpans[defnSpanNum])
+				count += 1
+				prevSpanNum += 1
+				print('does prev {!r} match defn {!r}'.format( prevSpans[prevSpanNum].text, defnSpans[count].text))
+
+			if count > defnSpanNum:
+				upto = defnSpans[count].start
+				chrCount = 0
+				print('  does prev char {!r} match defn char {!r}'.format(
+						prevSpans[prevSpanNum].text[chrCount], defn[upto]))
+				while prevSpans[prevSpanNum].text[chrCount] == defn[upto]:
+					upto += 1
+					chrCount += 1
+					print('  does prev char {!r} match defn char {!r}'.format(
+							prevSpans[prevSpanNum].text[chrCount], defn[upto]))
+
+				newDefn += defn[defnIdx:upto]
+				defnSpanNum += count
+				print('  adding defn[{}:{}]: {!r}'.format(defnIdx,
+						 upto, defn[defnIdx:upto]))
+				defnIdx = upto
+
+			print('adding comment {!r}'.format(cmt.text))
+			newDefn += cmt.text
+			prevSpanNum += len(cmt.spans)
+	# prevSpanNum += 1 # to get past shared span
+	# count += 1 # to get past shared span
+			cmtNum += 1
+
+			print('prevSpans',prevSpans[prevSpanNum])
+			print('defnSpans',defnSpans[defnSpanNum])
+			# print(' cmtSpans',cmtSpans[cmtSpanNum])
+			print(repr(newDefn))
+			pdb.set_trace()
+		# add rest of defn which has no more commetns
+		if defnIdx < len(defn):
+			newDefn += defn[defnIdx:]
+		pdb.set_trace()
+
+		# first recreate prevSpans by interleaving defnSpans and spans in comments
+		for cmt in obj.comments:
+			start, stop = cmt.context.indices
+			print('\ncomment {!r}, start: {}, stop: {}, defnSpanNum: {}, newSpansLen: {}'
+				  .format(cmt.text,start,stop,defnSpanNum,newSpansLen))
+			if newSpansLen < start: # there is text before comment
+				print('adding defnSpans[{}:{}]: {}'.format(defnSpanNum,start,defnSpans[defnSpanNum:start]))
+				newSpans.extend(defnSpans[defnSpanNum:start])
+				newSpansLen += start - defnSpanNum
+				defnSpanNum = start
+			newSpans.extend(cmt.spans)
+			print('adding cmts',cmt.spans)
+			print('newSpans:',newSpans)
+			print(repr(''.join(x.text for x in newSpans)))
+		pdb.set_trace()
+
+		newDefn = ''
+		spanStart = spanEnd = newDefnIdx = 0
+		count = txtLen = 0
+		for cmt in obj.comments:
+			# if cmt.tag == 'fnHead':	# comment is after fn call & before fn body
+			# 	bodyStart = obj.match.start('fnBody')
+			# 	callEnd = obj.match.end('fnCall')
+			# 	# limit region as comments may contain these characters
+			# 	firstBrace = defn.find('{', bodyStart)
+			# 	# endCall = defn.rfind(')', 0, firstBrace)
+			# 	endCall = defn.rfind(')', 0, callEnd + 1)
+			#
+			# 	if defn.find('{') != defn.find('{', bodyStart):
+			# 		print('_rebuildComments, trouble finding first open brace')
+			# 		pdb.set_trace()
+			# 	if defn.rfind(')', 0, firstBrace) != defn.rfind(')', 0, callEnd + 1):
+			# 		print('_rebuildComments, trouble finding fnCall closing parenthesis')
+			# 		pdb.set_trace()
+			#
+			# 	if -1 < endCall < firstBrace:
+			# 		# comments capture whitespace so we're tossing all
+			# 		#  between endCall and firstBrace
+			# 		defn = defn[:endCall + 1] + comment + defn[firstBrace:]
+			# 		dLen = len(defn)
+			# 	continue
+			start, stop = cmt.context.indices
+			group = cmt.context.group
+			print('\ncomment {!r}, start: {}, stop {}'.format(cmt.text, start,stop))
+			# incr defn index while stripped elements match
+			# in next, comment may share it, so char by char
+			# - same after comment
+
+			# find range where stripped tokens match
+			while defnSpanNum < start:
+				if defnSpans[defnSpanNum].text != prevSpans[prevSpanNum].text:
+					print('defnSpanNum',defnSpanNum, defnSpans[defnSpanNum].text)
+					print('prevSpanNum',prevSpanNum, prevSpans[prevSpanNum].text)
+					pdb.set_trace()
+					break
+				defnSpanNum += 1
+				prevSpanNum += 1
+			# add text where elements matched
+			if defnSpanNum > newDefnIdx:
+				matchEnd = defnSpans[defnSpanNum].end
+				tmp = defn[newDefnIdx:matchEnd] ##
+				print('adding defn: {!r},  defnSpanNum: {},  prevSpanNum: {}'
+					  .format(tmp,defnSpanNum,prevSpanNum)) ##
+				newDefn += defn[newDefnIdx:matchEnd]
+				newDefnIdx = matchEnd
+				# add letters up to start of comment
+				txtLen = len(defnSpans[defnSpanNum].text)
+				if defnSpans[defnSpanNum].text != prevSpans[prevSpanNum].text:
+					skipped = cmt.context.priorSkip.text ## also have .index
+					count = 0
+					while count < txtLen \
+							and defnSpans[defnSpanNum].text[count] \
+								== prevSpans[prevSpanNum].text[count]:
+						newDefn += defnSpans[defnSpanNum].text[count]
+						count += 1
+				else:
+					count = txtLen
+			# add comment
+			print('    comment: {!r}'.format(cmt.spans))
+			newDefn += cmt.text
+			prevSpanNum += len(group)
+
+			print('prevSpanNum: {}, defnSpanNum: {}, start: {}, stop: {}, group text: {!r}'
+				  .format(prevSpanNum, defnSpanNum, start, stop, ''.join(gp.text for gp in group)))
+			pdb.set_trace()
+
+			# if comment end shares next token, need to catch on next iteration
+			if count < txtLen:
+				while count < txtLen \
+						and defnSpans[defnSpanNum].text[count] \
+							== prevSpans[prevSpanNum].text[count]:
+					newDefn += defnSpans[defnSpanNum].text[count]
+					count += 1
+
+	except Exception as exc:
+		print(exc)
+		traceback.print_exc()
+		pdb.set_trace()
+
+def __rebuildComments(obj, defn):
+	# noinspection PyBroadException
+	try:
+		"""restore comments that were removed by .toString
+		   fromDefn: True => .defn not modified, so offset should be correct"""
+
+		# chars for syntactic breaks
+		JS_BRK_BEFORE = '{('		# comments placed after these
+		JS_BRK_AFTER = ';})'		#	"		"	  before  "
+		JS_BRK_SLASH = '/'			# depends on context
+		JS_BRK_RETURN = '\n'		# 	"	  "		"
+		# +1 so comments appear after char
+		JS_BEHIND_INCR = JS_BRK_AFTER + JS_BRK_SLASH + JS_BRK_RETURN
+		JS_AHEAD_INCR = JS_BRK_AFTER
+		JS_ALLBREAKS = JS_BRK_BEFORE + JS_BEHIND_INCR
+
+		def findJSBreak(string, start, step=None, stop=None):
+			length = len(string)
+			if start < 0: 			 start = 0
+			elif start > length - 1: start = length - 1
+			if step not in [1, -1]:	 step = 1
+			# first check if start is valid, independent of step
+			if string[start] in JS_BRK_BEFORE:
+				return start
+			if string[start - 1] in JS_BRK_AFTER + JS_BRK_RETURN:
+				return start
+			if stop is None or not (-1 < stop < length):
+				stop = length if step > 0 else 0
+			if step < 0:
+				# don't count start like rfind doesn't w/ end
+				start -= 1
+			firstWS = None
+			# search for valid insertion point
+			while (step > 0 and -1 < start < stop) \
+				  or (step < 0 and -1 < stop < start):
+				char = string[start]
+				if char in con.WHITESPACE and firstWS is None:
+					firstWS = start
+				if char in JS_ALLBREAKS:
+					if firstWS is not None and firstWS != start:
+						wsRun = string[firstWS:start] if step > 0 \
+								else string[start:firstWS]
+						if not wsRun.isspace():
+							return firstWS
+					if step > 0 and char in JS_AHEAD_INCR:
+						return start + 1
+					if step < 0 and char in JS_BEHIND_INCR:
+						return start + 1
+					return start
+				start += step
+			return -1 if firstWS is None else firstWS
+
+		# def findSafeEntry(start, string=None):
+		# 	if start is None:
+		# 		return -1
+		# 	test = defn if string is None else string
+		# 	before = findJSBreak(test, start, -1)
+		# 	after = findJSBreak(test, start)
+		# 	if -1 == after < before:
+		# 		return before
+		# 	elif -1 == before < after:
+		# 		return after
+		# 	elif -1 < before == after:
+		# 		return before
+		# 	elif -1 < before < after:		# use closest
+		# 		db = start - before
+		# 		da = after - start
+		# 		return before if db <= da else after
+		# 	return -1
+
+		def indentBefore():
+			"""adjust whitespace so comment aligns w/ previous line"""
+
+			if defn.count(con.NL, 0, insert) < 2 \
+					and cmt.offset <= insert: # first line, no indenting
+				if su.trailingWS(defn, insert) > 0 and con.NL == comment[-1]:
+					# avoid adding extra blank line
+					# - doesn't effect next cmt.offset as .toString inserted a NL
+					return insert, comment[:-1], 0
+				return insert, comment, 0
+			nextNL = comment.find(con.NL)
+			if nextNL < 0:					# comment is an inline one
+				return insert, comment, 0
+			# + 1 to include insert, as rfind searches [start:end]
+			lastNL = defn.rfind(con.NL, 0, insert + 1)
+			trailing = su.trailingWS(defn, insert, lastNL)
+			leading = su.leadingWS(comment)
+			spaces = trailing + leading
+			indent = currentIndent(insert)
+			if spaces == indent:			# indent is correct
+				return insert, comment, 0
+			# make correction w/i comment if possible
+			if nextNL == leading:  # check inside comment
+				if su.leadingWS(comment, nextNL + 1) == indent:
+					return insert, comment, 0
+			if spaces < indent: 			# we're lacking spaces
+				diff = indent - spaces
+				if nextNL <= leading:		# insert after NL
+					newCmt = comment[:nextNL + 1] + ' ' * diff \
+						   + comment[nextNL + 1:]
+				else:
+					newCmt = ' ' * diff + comment
+				return insert, newCmt, diff
+			elif spaces > indent:			# too many spaces
+				diff = spaces - indent
+				if diff <= leading: 		# take all from comment
+					return insert, comment[diff:], -diff
+				# take remainder from end of code line
+				rest = min(diff - leading, trailing)
+				if leading > 0:			# trim comment
+					return insert - rest, comment[leading:], -rest - leading
+				return insert - rest, comment, -rest - leading
+			return insert, comment, 0
+
+		def currentIndent(start):
+			"""return size of indent before start"""
+
+			lastNL = defn.rfind(con.NL, 0, start + 1)# + 1 as rfind searches [start:end]
+			if lastNL < 0:					# at start of definition
+				return con.CFG_TAB_LENGTH
+			opening = defn.count('{', 0, start)
+			if opening == 0:
+				return con.CFG_TAB_LENGTH
+			closing = defn.count('}', 0, start)
+			if closing < opening:
+				leading = su.leadingWS(defn, start, WS=con.WHITESPACE)
+				if defn[min(dLen, start + leading)] == '}':
+					closing += 1
+				return (opening - closing) * con.CFG_TAB_LENGTH
+			return con.CFG_TAB_LENGTH
+
+		def indentAfter():
+			"""adjust whitespace so comment aligns w/ next line"""
+
+			nextNL = defn.find(con.NL, resume)
+			if nextNL < 0:					# at end, comment has all the whitespace
+				return resume, comment, 0
+			if nextNL == resume:			# comment will not effect indent
+				return resume, comment, 0
+			trailing = su.trailingWS(comment)
+			leading = su.leadingWS(defn, resume, nextNL)
+			spaces = trailing + leading
+			indent = currentIndent(insert)
+			if spaces == indent:			# indent is correct
+				return resume, comment, 0
+			# make correction w/i comment if possible
+			if spaces < indent: 			# we're lacking spaces
+				# check if there is code before nextNL
+				if not defn[resume:nextNL].isspace():
+					diff = indent - spaces
+					return resume, comment + ' ' * diff, diff
+				# appending to comment won't work, why is code indent not correct
+				if con.CAGSPC:
+					print('indentAfter, unanticipated case, {} <-> {}'.format(
+							comment[max(0, len(comment)-30) :],
+							defn[resume : min(dLen, resume+30)]))
+					pdb.set_trace()
+				return resume, comment, 0
+			elif spaces > indent:			# too many spaces
+				diff = spaces - indent
+				if diff <= trailing: 		# take all from comment
+					return resume, comment[:-diff], -diff
+				# take remainder from start of code line
+				rest = min(diff - trailing, leading)
+				if trailing > 0:			# trim comment
+					return resume + rest, comment[:-trailing], -rest - trailing
+				return resume + rest, comment, -rest - trailing
+			return resume, comment, 0
+
+		def excessSpaces(keep=0):
+			# remove all but 'keep' spaces after comment
+			resumeAt = resume
+			cmtTail = su.trailingWS(comment, resumeAt)
+			defnLeading = su.leadingWS(defn, resumeAt)
+			excess = cmtTail + defnLeading - keep
+			if excess > 0:
+				if defnLeading > 0:
+					available = min(defnLeading, excess)
+					resumeAt += available
+					excess -= available
+			if excess > 0:
+				if cmtTail > 0:
+					available = min(cmtTail, excess)
+					# excess -= available
+					return resumeAt, comment[:-available]
+			return resumeAt, comment
+
+		def addTaggedCmts(string, cmtsLeft, cmtTag):
+			tagged = [oc for oc in cmtsLeft if oc.tag == cmtTag]
+			for tag in tagged:
+				preffixEndingNL = -1
+				if tag.prefixSkip:
+					preffixEndingNL = su.endsLine(tag.prefixSkip.text)
+				if preffixEndingNL > 0 > su.endsLine(string):
+					string += con.NL
+				string += tag.text
+			return string
+
+		def closeIife(fmtBody, cmtsLeft):
+			# as we store iife as a function, return from .toString will only
+			# contain the fn body of an iife
+
+			# postArgs = fmtBody.rfind(')')
+			# preArgs = fmtBody.rfind('(')
+			# fnTail = fmtBody.rfind('}')
+			# tagged = {cl.tag: cl for cl in cmtsLeft
+			# 		  		if cl.tag in ['fnTail', 'preArgs', 'postArgs']}
+			# fmtBody = addTaggedCmts(fmtBody, cmtsLeft, 'fnTail')
+			# fmtBody = addTaggedCmts(fmtBody, cmtsLeft, 'preArgs')
+			# # a comment may reside in the iife's args but obj.iifeArgs is a unit
+			# #   ie. everything between the parentheses is in obj.iifeArgs
+			# if len(obj.iifeArgs) > 0:
+			# 	fmtBody += obj.iifeArgs
+			# fmtBody = addTaggedCmts(fmtBody, cmtsLeft, 'postArgs')
+			# return fmtBody
+
+			if 'fnLead' in charToInsert:	# had no comments to work around
+				fmtBody = charToInsert.pop('fnLead') + fmtBody
+			tagged = {cl.tag: cl for cl in cmtsLeft
+					  		if cl.tag in ['fnTail', 'preArgs', 'postArgs']}
+			if 'fnTail' in tagged:
+				fmtBody = addTaggedCmts(fmtBody, cmtsLeft, 'fnTail')
+			fmtBody += charToInsert.pop('fnTail')
+			if 'preArgs' in tagged:
+				fmtBody = addTaggedCmts(fmtBody, cmtsLeft, 'preArgs')
+			fmtBody += charToInsert.pop('preArgs')
+			# a comment may reside in the iife's args but obj.iifeArgs is a unit
+			#   ie. everything between the parentheses is in obj.iifeArgs
+			if len(obj.iifeArgs) > 0:
+				fmtBody += obj.iifeArgs
+			fmtBody += charToInsert.pop('postArgs')
+			if 'postArgs' in tagged:
+				fmtBody = addTaggedCmts(fmtBody, cmtsLeft, 'postArgs')
+			return fmtBody
+
+		defn = defn.expandtabs(con.CFG_TAB_LENGTH)
+
+##
+		if not obj.comments or len(obj.comments) == 0:
+			return '(' + defn + ')()' if obj.type == 'iife' else defn
+		charToInsert = {'fnLead': '(', 'fnTail': ')', 'preArgs': '(', 'postArgs': ')'} \
+						if obj.type == 'iife' else {}
+## to do: if an iife, defn = '(' + defn + ')()'
+##  - get rid of charToInsert
+##  - fix closeIife
+
+		offsetChange = 0
+		dLen = len(defn)
+		# change in size due to .toString, > 0 => added char, < 0 deleted char
+		toStringChg = 0 if obj.strippedSize < 0 else dLen - obj.strippedSize
+		# an iife must have its opening parenthesis added early as its was
+		# present when contexts/offset were created
+		if obj.type == 'iife':
+			defn = charToInsert.pop('fnLead') + defn
+			toStringChg += 1
+		insert = resume = 0
+
+		for cmt in obj.comments:
+			comment = cmt.text
+			if obj.type in ['func', 'iife'] \
+					and cmt.tag in ['fnTail', 'preArgs', 'postArgs']:
+				# comment(s) follows entire fn body (iife stored as fn in property)
+				break
+			if cmt.tag == 'fnHead':	# comment is after fn call & before fn body
+				if comment == ' ': 	# this would just replace a space with a space
+					continue
+				firstBrace = defn.find('{')
+				endCall = defn.rfind(')', 0, firstBrace)
+				if -1 < endCall < firstBrace:
+					# comments capture whitespace so we're tossing all
+					#  between endCall and firstBrace
+					defn = defn[:endCall + 1] + comment + defn[firstBrace:]
+					dLen = len(defn)
+				continue
+			isInline, isEol = _findCommentType(comment)
+
+			if obj.name == 'yard':
+				print('toStringChg',toStringChg)
+			if obj.name == 'yard' and 'costs of extra equipment' in comment:
+				print(cmt)
+				pdb.set_trace()
+
+			print(obj.name)
+
+			# attempt to locate prefix (may fail if near start of definition)
+			check = defn + ')()' if obj.type == 'iife' else defn
+## tmp; see to do above
+			insert = _findContext(obj, check, cmt, -1)
+			resume = _findContext(obj, check, cmt, 1)
+
+			if insert < 0 and resume < 0:	# no luck find either
+				if cmt.offset > dLen//2:	# append
+					insert = dLen
+					# insert = findJSBreak(defn, dLen, -1)
+				else:						# prepend
+					insert = 0
+					# insert = findJSBreak(defn, 0)
+				resume = insert
+			elif insert < 0:
+				insert = resume
+			elif resume < 0:
+				resume = insert
+
+			if -1 < su.endsLine(defn, 0, insert) or -1 < su.startsLine(comment):
+				# have a line break before comment, ensure indent is correct
+				if -1 < insert:
+					insert, comment, dBefore = indentBefore()
+					offsetChange += dBefore
+				elif -1 < resume:
+					resume, comment, dAfter = indentAfter()
+					offsetChange += dAfter
+			elif cmt.tag != 'fnLead' and -1 < su.endsLine(comment):
+				# have a line break after comment, ensure following indent is correct
+				if -1 < resume:
+					resume, comment, dAfter = indentAfter()
+					offsetChange += dAfter
+			srcPostNLs = 0
+			if cmt.suffixSkip:
+				srcPostNLs = su.countNLs(cmt.suffixSkip.text, 0, 1)
+			# skippedNLs = 0 if insert >= resume else su.countNLs(defn, insert, 1, resume)
+			postNLs = su.countNLs(defn, resume, 1)
+			leadingNL = su.startsLine(defn, resume)
+			finisNL = su.endsLine(comment)
+			# srcPostNLs, postNLs, leadingNL, finisNL
+			if srcPostNLs < postNLs and -1 < leadingNL and -1 < finisNL:
+				# comment will generate an extra blank line,
+				# as insertion yields adjacent NLs
+				extras = postNLs - srcPostNLs	# con.NL(s) after insert
+				while extras > 0 and -1 < leadingNL:
+					resume = leadingNL + 1
+					leadingNL = su.startsLine(defn, 0, resume)
+					extras -= 1
+				while extras > 0 and -1 < finisNL:
+					# comment ends w/ con.NL(s), its insertion generates blank line
+					comment = comment[:-1] if comment.endswith(con.NL) \
+									else comment[:finisNL] + comment[finisNL + 1:]
+					finisNL = su.endsLine(comment)
+					extras -= 1
+
+			# removing surplus spaces
+			# eg. add inline at start of line, resume needs adjusting
+			#     so WS doesn't flow thru to appear after comment
+			if isInline and su.endsLine(comment) < 0:
+				resume, comment = excessSpaces()
+
+			## sometimes resume is more correct, eg. when insert didn't skip but resume did
+			## with all the work wrt spaces, we should use the one that doesn't include WS
+			## NB: char @ insert is not output but one @ resume is
+			## also, comments capture leading whitespace
+			## - reliance on the following is hiding/causing some bugs!
+			##   eg. the 5 space indent on fdot in dist
+
+			if insert != resume \
+				and not defn[min(insert, resume):max(insert, resume)].isspace():
+				# # find nearest whitespace, outside comment
+				# pivot = e
+				# cmtFwd = min(defn.find('//', pivot), defn.find('/*'), pivot)
+				deltaI = abs(cmt.offset - insert)
+				deltaR = abs(cmt.offset - resume)
+				if deltaI < deltaR:
+					print(f'"{obj.name}", resetting insert {insert} to resume {resume}')
+					print(cmt)
+					insert = resume
+				else:
+					print(f'"{obj.name}", resetting resume {resume} to insert {insert}')
+					print(cmt)
+					resume = insert
+			# safety valve: remove only WHITESPACE else syntax error!
+			if insert > resume and not defn[resume:insert].isspace():
+				print(f'safety valve: "{obj.name}", resetting insert {insert} to resume {resume}')
+				print(cmt)
+				insert = resume
+			elif insert < resume and not defn[insert:resume].isspace():
+				print(f'safety valve: "{obj.name}", resetting resume {resume} to insert {insert}')
+				print(cmt)
+				resume = insert
+
+			defn = defn[:insert] + comment + defn[resume:]
+			dLen = len(defn)
+			toStringChg += len(comment)
+
+		if obj.type == 'iife':
+			defn = closeIife(defn, obj.comments)
+		elif obj.type == 'func':
+			defn = addTaggedCmts(defn, obj.comments, 'fnTail')
+		return defn
+	except Exception as exc:
+		print(exc)
+		traceback.print_exc()
+		pdb.set_trace()
+
+def _generateCmtSpans(string):
+	"""create a list of comment spans (start, end, hasNL) for string"""
+
+	# this spanning scheme can have adjacent comments both capture whitespace
+	# - handled in _rebuildComments for fnBody and _makeCmtsBySpan for tagged ones
+	inlineCmts = [(match.start(), match.end(), con.NL in match['inlineCmt'])
+					for match in rx.INLINE_CMT_RE.finditer(string)]
+	eolCmts = [(match.start(), match.end(), True)
+					for match in rx.ENDLINE_CMT_RE.finditer(string)]
+	quoted = [match.span() for match in rx.QUOTED_RE.finditer(string)]
+	spans = inlineCmts[:]
+	spans.extend(eolCmts)
+	spans = sorted((spStart, spEnd, hasNL) for spStart, spEnd, hasNL in spans
+			if not any(qStart < spStart < spEnd < qEnd
+					   for qStart, qEnd in quoted))
+	return spans
+	# return {'inlineCmts': inlineCmts, 'eolCmts': eolCmts, 'spans': spans}
+
+def _makeCmtsBySpan(obj):
+	"""create AliasComment instances using 'obj's .cmtSpans"""
+	
+	del obj.comments[:]
+	# exclude any comment in iife's args (already in match['iifeArgs'])
+	if obj.iifeArgsSpan:
+		exStart, exEnd = obj.iifeArgsSpan
+		spans = [(start, end, hasNL) for start, end, hasNL in obj.cmtSpans
+					if not (exStart <= start < exEnd)]
+	else:
+		spans = obj.cmtSpans
+	# setup for assigning tags to comments
+	if obj.type == 'func':
+		tags = rx.FUNCTION_CMTS
+	elif obj.type == 'iife':
+		tags = rx.IIFE_CMTS
+	else:
+		tags = rx.ALIAS_CMTS
+	tagged = [(obj.match.start(tag), obj.match.end(tag), tag) for tag in tags
+				if obj.match[tag] and len(obj.match[tag]) > 0]
+	# use obj.cmtSpans to instantiate AliasComment's
+	prevEnd, prevText = -1, ''
+	for start, end, hasNL in spans:
+		tag = [tag for tagStart, tagEnd, tag in tagged if tagStart <= start < tagEnd]
+		hasTag = tag[0] if len(tag) else None
+		text = obj.defn[start:end]
+
+		# if hasTag == 'fnHead' and text == ' ':
+		# 	continue		# .toString always has one space here
+		if obj.type == 'func' and hasTag == 'fnTail' and text == con.NL:
+			continue		# no need to carry final NL char
+		if obj.type == 'iife' and hasTag == 'postArgs' and text == con.NL:
+			continue		# no need to carry final NL char
+
+		# comment REs capture NLs and when 2 lines have immediately following and
+		# different types of comments, the NL between them is captured by both
+		# - easist solution is to remove leading whitespace upto the NL from
+		#   the second comment
+		# - only needed outside fnBody as handled in _rebuildComments
+		if hasTag and hasTag != 'fnBody' and start < prevEnd: # overlapping captured whitespace
+			isInline, isEol = _findCommentType(prevText)
+			prevType = 'inline' if isInline else 'eol' if isEol else None
+			isInline, isEol = _findCommentType(text)
+			if prevType is None or (not isEol and not isInline):
+				if con.CAGSPC:
+					print('_makeCmtsBySpan, found overlap other than comments')
+					print(prevText)
+					print(text)
+					pdb.set_trace()
+			elif (prevType == 'eol' and isInline) or (isEol and prevType == 'inline'):
+				newStart = su.startsLine(text) + 1 # index of NL + 1
+				text = text[newStart:]
+				start += prevEnd - start
+
+		obj.addComment(text, start, hasTag)
+		prevEnd, prevText = end, text
+	obj.comments.sort(key=attrgetter('offset'))
+
+def invertCmtSpans(spans, strLen, iifeArgsSpan=None):
+	"""given spans (list of tuple(start, end, hasNL), return a list
+	   of spans for uncommented text, inserting NLs when comments have them"""
+
+	if not spans or len(spans) == 0:		# no comments
+		return [0, strLen, False]
+	flat = [idx for span in spans for idx in span]
+	hasEndingNL = flat[-1]
+	# strip comments and insert NL for those that have one
+	if flat[0] == 0 and flat[-2] == strLen:
+		# comments bookend string, remove both ends
+		# [0, 15, True, 26, 37, False, ... 657, 671, False, 672, 700, True]
+		# -> [15, True, 26, 37, False, ... 657, 671, True, 672]
+		flat.pop(0)
+		flat.pop()
+		flat.pop()
+		flat[1] = False		# suppress NL from fnLead comment
+		flat[-2] = flat[-2] or hasEndingNL
+	elif flat[0] == 0:
+		# string starts with a comment, remove first, add len
+		# [0, 15, True, 26, 37, False, ... 657, 671, False, 672, 680, True]
+		# -> [15, True, 26, 37, False, ... 657, 671, True, 672, 680, True, 700]
+		flat.pop(0)
+		flat[1] = False		# suppress NL from fnLead comment
+		flat.append(strLen)
+	elif flat[-2] == strLen:
+		# string ends with a comment, remove last, add 0
+		# [7, 15, True, 26, 37, False, ... 657, 671, False, 672, 700, True]
+		# -> [0, False, 7, 15, True, 26, 37, False, ... 657, 671, True, 672]
+		flat.insert(0, False)
+		flat.insert(0, 0)
+		flat.pop()
+		flat.pop()
+		if len(flat) > 3:	# a single comment has only 3 items
+			flat[-2] = flat[-2] or hasEndingNL
+	else:
+		# neither end has a comment, add 0 and last
+		# [7, 15, True, 26, 37, False, ... 657, 671, False, 672, 680, True]
+		# -> [0, False, 7, 15, True, 26, 37, False, ... 672, 680, True, 700]
+		flat.insert(0, False)
+		flat.insert(0, 0)
+		flat.append(strLen)
+
+	if iifeArgsSpan:
+		# suppress NL if present in comment in iifeArgs
+		exStart, exEnd = iifeArgsSpan
+		inIifeArgs = [(start, end, hasNL) for start, end, hasNL in spans
+						if exStart <= start < exEnd]
+		if len(inIifeArgs):
+			flat[-2] = False
+	fLen = len(flat)
+	return [(flat[x], flat[x+1], flat[x+2]) for x in range(0, fLen, 3)]
+
+def textFromInvertedSpans(string, noCmtSpans, startAt=0):
+	return ''.join((con.NL if hasNL else '') + string[start:end]
+				   for start, hasNL, end in noCmtSpans
+				   if start >= startAt)
+
+# no longer in use
+def _stripByLoops(string):
+	index = 0
+	defn = ''
+	strLen = len(string)
+	while index < strLen:
+		blocks = []
+		quoted = rx.QUOTED_RE.search(string, index)
+		if quoted:
+			start, end = quoted.span()
+			blocks.append((start, end, 'q', None))
+		endLine = rx.ENDLINE_CMT_RE.search(string, index)
+		if endLine: # captures leading WS and any trailing NLs
+			start, end = endLine.span('eolCmt')
+			blocks.append((start, end, 'e', endLine['eolCmt']))
+		inLine = rx.INLINE_CMT_RE.search(string, index)
+		if inLine: # captures leading WS and any trailing NLs
+			start, end = inLine.span('inlineCmt')
+			blocks.append((start, end, 'i', inLine['inlineCmt']))
+		if not len(blocks):
+			break
+		blocks.sort(key=itemgetter(0,2))
+		start, end, kind, comment = blocks.pop(0)
+		if kind == 'q':				# quoted string, ignore any comments inside
+			defn += string[index:end]
+		else:						# excise comment
+			defn += string[index:start]
+			# suppress NL from fnLead comment (ie. when start == 0)
+			if start > 0:
+				hasNL = su.endsLine(comment)
+				if -1 < hasNL:
+					defn += comment[hasNL:]
+		index = end
+
+	if index < strLen:
+		defn += string[index:]
+	defn = defn.strip()				# suppress any trailing NL
+	if defn.endswith(con.NL + ')'):
+		return defn [:-2] + ')'
+	return defn
+
+def _stripByGenSpans(string):
+	spans = _generateCmtSpans(string)
+	return _stripBySpans(string, spans)
+
+def _stripBySpans(string, spans):
+	if not spans or len(spans) == 0:# no comments
+		return string
+	noCmtSpans = invertCmtSpans(spans, len(string))
+	return textFromInvertedSpans(string, noCmtSpans)
+
+def stripComments(string, obj=None):
+	"""return a copy of string with comments removed"""
+
+	if obj and obj.cmtSpans:
+		return _stripBySpans(string, obj.cmtSpans)
+	return _stripByGenSpans(string)
+
+def parseNewAlias(obj):
+	parseDefn(obj, setType=True)
+	_parseComments(obj)
+
+def _parseComments(obj):
+	if gv.formattingAliases:
+		obj.cmtSpans = _generateCmtSpans(obj.defn)
+		_makeCmtsBySpan(obj)
+		_addCommentContext(obj)
+
+def prepAliasForRegistration(obj):
+	if gv.formattingAliases:
+		# contruct alias and remove comments to avoid possible syntax errors
+		if obj.type is None:
+			defn = obj.match['simpleAlias']
+		else:
+			defn = obj.match['fnCall'] + obj.match['fnBody']
+			defn = _stripByGenSpans(defn)
+
+			# # defn is a substring, so trim spans to match (vs _generateCmtSpans)
+			# defn = obj.match['fnCall']
+			# defn += '' if obj.match['fnHead'] is None else obj.match['fnHead']
+			# defn += obj.match['fnBody']
+			# callStart = obj.match.start('fnCall')
+			# bodyEnd = obj.match.end('fnBody')
+			# # shift spans to account for everything before 'function'
+			# spans = [(start - callStart, end - callStart, hasNL)
+			# 			for start, end, hasNL in obj.cmtSpans
+			# 				if callStart <= start < bodyEnd]
+			# defn = _stripBySpans(defn, spans)
+	else:
+		defn = stripComments(obj.defn, obj)
+	obj.strippedSize = len(defn)
+	return defn
+
+def restoreAliasDefn(obj, defn):
+	if obj.type is not None:
+		obj.defn = _rebuildComments(obj, defn)
+		parseDefn(obj)
+		_parseComments(obj)
+
+def removeIIFEprop(alias):
+	if gv.connectedToOolite:
+		cmd = 'delete console.script.{}'.format(con.IIFE_PROPERTY_TAG + alias)
+		gv.app.queueSilentCmd(cmd, 'del-{}-IProp'.format(alias))
+
+def parseDefn(obj, setType=False, stripped=None):
+	try:
+		# need to differentiate between an iife that .toString returns as a
+		# function and a user changing an iife to a function
+		#  - .type remembers what it was and is reset in _aliasDBinsert
+		#    via parseNewAlias
+
+		string = stripped if stripped else obj.defn
+		while True:
+			match = rx.IIFE_RE.match(string)
+			if match:
+				obj.match = match
+				if obj.type == 'func':
+					# user switched from function -> iife; property gets reused
+					obj.resetFunc()
+				if setType:
+					obj.type = 'iife'
+				if stripped is None:
+					# only save when comments are present
+					obj.iifeArgs = match['iifeArgs']
+					obj.iifeArgsSpan = match.span('iifeArgs')
+				break
+			match = rx.FUNCTION_RE.match(string)
+			if match:
+				if obj.type == 'iife':
+					# user switched from iife -> function,
+					# remove IIFE_PROPERTY_TAG property
+					removeIIFEprop(obj.name)
+					obj.resetIIFE()
+				if setType:
+					obj.type = 'func'
+				obj.match = match
+				break
+			match = rx.ALIAS_RE.match(string)
+			if match:
+				if setType:
+					obj.type = None
+				obj.match = match
+				if obj.polled is None:	# only set default for new defn
+					obj.polled = defaultPolling(obj.name, string)
+				if obj.type == 'iife':
+					removeIIFEprop(obj.name)
+					obj.resetIIFE()
+				elif obj.type == 'func':
+					obj.resetFunc()
+				break
+			msg = 'parseDefn, failed to parse alias {!r}: \n  {!r}'.format(
+					obj.name, obj.defn)
+			gv.debugLogger.error(msg)
+			if con.CAGSPC:
+				print(msg)
+				pdb.set_trace()
+			break
+
+	except Exception as exc:
+		print(exc)
+		traceback.print_exc()
+		pdb.set_trace()
+
+################################################################################
+# functions common to aliaes and comments
+# ?will we need a parent module
+################################################################################
+
+def defaultPolling(alias, defn=None):
+	# set default based on 'system...' or 'worldScript...'
+	if defn is None:
+		if alias in gv.aliases:
+			defn = gv.aliases[alias].get('defn', None)
+		if defn and len(defn) == 0:
+			defn = fetchAliasText()
+	if defn is None or len(defn) == 0:
+		return False
+	stripped = stripComments(defn)
+	poll = rx.DEFAULT_POLLING_RE.match(stripped)
+	if poll:
+		return poll['yes'] is not None
+
+	errmsg = 'defaultPolling, DEFAULT_POLLING_RE failed to match '
+	errmsg += repr(stripped)
+	if con.CAGSPC:
+		print(errmsg)
+		pdb.set_trace()
+	else:
+		gv.debugLogger.error(errmsg)
+
+	return False
+## remove dbg block
+
+def fetchAliasText():					# retrieve definition from Text
+	txt = gv.aliasDefn
+	defn = txt.get('1.0', 'end -1c')	# Text widget always contains a con.NL, even after del!
+	# convert all tabs now as .toString will
+	defn = defn.expandtabs(con.CFG_TAB_LENGTH)
+	return unicode(defn) if con.Python2 else defn
+
