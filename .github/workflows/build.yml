@@ -1,0 +1,243 @@
+# This workflow will build a python project with pyinstaller
+
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+  #  branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  semver:
+    runs-on: ubuntu-latest
+    outputs:
+      GITVERSION_SEMVER: ${{ steps.gitversion.outputs.SemVer }}
+      GITVERSION_ASSEMBLYSEMVER: "${{ steps.gitversion.outputs.AssemblySemVer }}"
+      GITVERSION_MAJORMINORPATCH: "${{ steps.gitversion.outputs.MajorMinorPatch }}"
+      GITVERSION_MAJOR: ${{ steps.gitversion.outputs.GITVERSION_MAJOR }}
+      GITVERSION_MINOR: ${{ steps.gitversion.outputs.GITVERSION_MINOR }}
+      GITVERSION_PATCH: ${{ steps.gitversion.outputs.GITVERSION_PATCH }}
+      MACOS_MAJORMINORPATCH: ${{ steps.output1.outputs.MACOS_MAJORMINORPATCH }}
+      DEBIAN_PKGVERSION: ${{ steps.output1.outputs.DEBIAN_PKGVERSION }}
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0
+      with:
+        versionSpec: '5.x'
+      
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0
+      
+    - id: output1
+      run: |
+        set -x
+        printenv | grep GitVersion_ | sort
+        echo "GITVERSION_SEMVER=${GitVersion_SemVer}" >> "$GITHUB_OUTPUT"
+        echo "GITVERSION_ASSEMBLYSEMVER=${GitVersion_AssemblySemVer}" >> "$GITHUB_OUTPUT"
+        echo "GITVERSION_MAJORMINORPATCH=${GitVersion_MajorMinorPatch}" >> "$GITHUB_OUTPUT"
+        echo "GITVERSION_MAJOR=${GitVersion_Major}" >> "$GITHUB_OUTPUT"
+        echo "GITVERSION_MINOR=${GitVersion_Minor}" >> "$GITHUB_OUTPUT"
+        echo "GITVERSION_PATCH=${GitVersion_Patch}" >> "$GITHUB_OUTPUT"
+        echo "DEBIAN_PKGVERSION=${GitVersion_Major}.${GitVersion_Minor}-${GitVersion_Patch}" >> "$GITHUB_OUTPUT"
+        if [ "${GitVersion_Major}" == "0" ]
+        then
+          echo "MACOS_MAJORMINORPATCH=1.${GitVersion_Minor}.${GitVersion_Patch}" >> "$GITHUB_OUTPUT"
+        else
+          echo "MACOS_MAJORMINORPATCH=${GitVersion_MajorMinorPatch}" >> "$GITHUB_OUTPUT"
+        fi
+
+  package-linux:
+    needs: [semver]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: setup pyenv
+      run: |
+        sudo apt-get install python3-tk python3-venv python3-pip
+        venv="$HOME/python3/pyinstaller"
+        rm -Rf "$venv"  # uncomment to make fresh venv.
+        python3 -m venv "$venv"
+        source "${venv}"/bin/activate
+        pip install pyinstaller
+        pip install twisted
+
+    - name: Build using pyinstaller
+      run: |
+        venv="$HOME/python3/pyinstaller"
+        source "${venv}"/bin/activate
+        pyinstaller \
+        --onefile \
+        --add-binary "oojsc.xbm:." \
+        --add-binary "OoJSC.ico:." \
+        DebugConsole.py
+
+    - name: create archive
+      run: |
+        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux.tgz dist/
+        
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Oolite-Debug-Console-Ubuntu
+        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux.tgz
+
+  package-windows:
+    needs: [semver]
+    runs-on: windows-latest
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install pyinstaller
+      run: |
+        pip install -U pyinstaller
+        pip install -U twisted
+        pip install -U pywin32
+
+    # in Windows PowerShell the backtick indicates a multiline command
+    # see https://stackoverflow.com/questions/3235850/how-to-enter-a-multi-line-command
+    - name: Build using pyinstaller
+      run: |
+         pyinstaller `
+         --noconfirm `
+         --clean `
+         --log-level=WARN `
+         --onefile `
+         --name OoDebugConsole `
+         --add-binary "OoJSC.ico:." `
+         --add-binary "oojsc.xbm:." `
+         --noconsole `
+         --icon=OoJSC.ico `
+         DebugConsole.py
+
+    #      --version-file=OoDebug_version_info.txt `
+    #      --paths "C:\Program Files (x86)\Windows Kits\10\Redist\ucrt\DLLs\x86"  `
+    #      --noupx `
+
+    - name: check filesystem
+      run: |
+        Get-ChildItem -Path "$env:GITHUB_WORKSPACE" –Recurse
+
+    - name: create archive
+      run: |
+        7z a -tzip -r -wdist Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-win.zip dist\*
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Oolite-Debug-Console-Windows
+        path: Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-win.zip
+
+  package-macos:
+    needs: [semver]
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install pyinstaller
+      run: |
+        pip install -U pyinstaller
+
+    - name: Build using pyinstaller
+      run: |
+        pyinstaller \
+        --onefile \
+        --add-binary "oojsc.xbm:." \
+        --add-binary "OoJSC.ico:." \
+        DebugConsole.py
+
+    - name: create archive
+      run: |
+        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos.tgz dist/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Oolite-Debug-Console-MacOs
+        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos.tgz
+
+  release:
+    needs: [semver,package-linux,package-windows,package-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Check status
+      run: |
+        set
+        echo -n "Current directory: "
+        pwd
+        find . -not -path "./oolitestarter/.git/*"
+
+    - name: Remove old prereleases
+      if: github.ref != 'refs/heads/master'
+      uses: dev-drprasad/delete-older-releases@v0.3.2
+      with:
+        #repo: <owner>/<repoName> # defaults to current repo
+        keep_latest: 6
+        delete_tag_pattern: v\d+\.\d+\.\d+-.*
+        delete_prerelease_only: 'true'
+        #delete_branch: '${{ github.ref_name }}'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Prerelease
+      if: github.ref != 'refs/heads/master'
+      id: create_prerelease
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
+        prerelease: true
+        title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
+        files: |
+          artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
+          artifacts/Oolite-Debug-Console-Windows/*.zip
+          artifacts/Oolite-Debug-Console-MacOs/*.tgz
+      
+    - name: Remove old releases
+      if: github.ref == 'refs/heads/master'
+      uses: dev-drprasad/delete-older-releases@v0.3.2
+      with:
+        #repo: <owner>/<repoName> # defaults to current repo
+        keep_latest: 4
+        delete_tag_pattern: v\d+\.\d+\.\d+
+        delete_prerelease_only: 'false'
+        #delete_branch: 'main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create Release
+      if: github.ref == 'refs/heads/master'
+      id: create_release
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
+        prerelease: false
+        title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
+        files: |
+          artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
+          artifacts/Oolite-Debug-Console-Windows/*.zip
+          artifacts/Oolite-Debug-Console-MacOs/*.tgz
+
