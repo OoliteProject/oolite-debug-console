@@ -209,7 +209,7 @@ jobs:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         prerelease: true
-        title: "Oolite Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
+        title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
           artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
@@ -235,7 +235,7 @@ jobs:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         prerelease: false
-        title: "Oolite Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
+        title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
           artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
