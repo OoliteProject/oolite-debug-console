@@ -1,0 +1,24 @@
+2.05
+20240423 0246 UTC
+Added
+    Linux binary builder and its readme.
+    version file.
+    changelog
+
+2.06
+Linux builder
+    Made the icon a symlink to the toplevel one.
+    In the wrapper script, fixed problem when ~/.Oolite is absent.
+    Added keywords and categories to .desktop file.
+    Reanme wrapper script to OoliteDebugConsole2.
+    Rename real executable to OoliteDebugConsole2-real.
+Other
+    Tweaked startup text to improve 'press c' clue.
+
+2.07
+Linux builder
+    Added how to change conf directory into readme.
+    Changed env var in wrapper to OoDC2_CFG_DIR.
+    Fixed hardocoded paths which caused fail if installed in /usr or /usr/local
+Other
+    This appeared as 'Tk' in the task switcher on Linux. Set Tk classname.

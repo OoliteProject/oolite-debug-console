@@ -10,7 +10,7 @@
 #
 #  GUI stuff (c) 2019 cag CC-by-NC-SA 4
 #
-#  Trivial fixes (c) 2024 MrFlibble CC-by-NC-SA 4
+#  Trivial fixes and binary builder (c) 2024 MrFlibble CC-by-NC-SA 4
 #
 
 """
@@ -18,13 +18,12 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks, cag"
-__version__	= "2.03"
+__version__	= "2.07"
 
 import os, sys
 if sys.platform == 'win32' and sys.executable.endswith("pythonw.exe"):
 	sys.stdout = open(os.devnull, "w");
-	sys.stderr = open(os.path.join(os.getcwd(), "stderr-"+os.path.basename(sys.argv[0])), "w")		
-	
+	sys.stderr = open(os.path.join(os.getcwd(), "stderr-"+os.path.basename(sys.argv[0])), "w")
 try:
 	from sys import frozen
 	FROZEN = True
@@ -49,7 +48,7 @@ from re import compile
 from logging import StreamHandler, basicConfig, Formatter, getLogger, shutdown, DEBUG, WARNING
 from traceback import format_tb
 from errno import ENOENT, ENOSPC
-	
+
 from platform import system as platform_system
 platformIsLinux = platform_system() == 'Linux'
 platformIsWindows = platform_system() == 'Windows'
@@ -376,7 +375,7 @@ class TopWindow(Toplevel):
 		if hasattr(self, 'mouseXY'):
 			self.geometry('+{}+{}'.format(*self.mouseXY))
 		self.deiconify()
-		self.lift()						# required in pyinstaller version else fontSelectTop won't show (anywhere!)
+		self.lift()			# required in pyinstaller version else fontSelectTop won't show (anywhere!)
 		self.focus_set()
 
 	def closeTop(self, event=None):
@@ -1360,7 +1359,7 @@ class AppWindow(Frame):
 		self.top.bind_all('<<closeAnyOpenFrames>>', self.closeAnyOpenFrames)
 
 	def init_toplevel(self):
-		top = self.top = Tk()
+		top = self.top = Tk(className='OoDebug2')
 		top.minsize(MINIMUM_WIDTH, MINIMUM_HEIGHT)
 		top.resizable(width=True, height=True)
 		top.title(DEBUGGER_TITLE)
@@ -1375,7 +1374,7 @@ class AppWindow(Frame):
 			top.geometry(self.localOptions['Geometry'])
 		except:
 			top.geometry(DEFAULT_GEOMETRY)# "500x380"
-		iconFile = 'OoJSC48x48.png' if platformIsLinux else 'OoJSC.ico'
+		iconFile = 'OoJSC256x256.png' if platformIsLinux else 'OoJSC.ico'
 		iconPath = os.path.join(os.getcwd(), iconFile)
 
 		if FROZEN:
@@ -1386,7 +1385,7 @@ class AppWindow(Frame):
 				meipass = os.environ['_MEIPASS2']
 			if meipass:
 				iconPath = os.path.join(meipass, iconFile)
-				
+
 		# Under Windows, the DEFAULT parameter can be used to set the icon
 		# for the widget and any descendents that don't have an icon set
 		# explicitly.  DEFAULT can be the relative path to a .ico file
@@ -1404,15 +1403,19 @@ class AppWindow(Frame):
 						pass
 		else:
 			try:
-				top.iconbitmap(iconPath)
+				tempicon = PhotoImage(file = iconPath)
+				top.iconphoto(False, tempicon)
 			except:
 				try:
-					top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+					top.iconbitmap(iconPath)
 				except:
 					try:
-						top.iconbitmap('@oojsc.xbm')
+						top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), iconFile))
 					except:
-						pass
+						try:
+							top.iconbitmap('@oojsc.xbm')
+						except:
+							pass
 
 ## app window and widgets ##################################################
 
@@ -4304,6 +4307,7 @@ def main():
 		app.listener=reactor.listenTCP(TCP_Port, factory)
 		app.colorPrint("Use Up and Down arrows to scroll through the command history.")
 		app.colorPrint("Type /quit to quit.")
+		app.colorPrint("To (dis)re-connect a running Oolite: In-flight, pause and press 'c'.")
 		app.colorPrint("Waiting for connection...")
 	except Exception as exc:
 		debugLogger.exception(exc)
@@ -4324,8 +4328,3 @@ if __name__ == "__main__":
 			debugLogger.exception(errmsg)
 	else:
 		main()
-
-
-		
-		
-		
