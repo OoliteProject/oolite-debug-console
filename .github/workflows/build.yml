@@ -54,6 +54,29 @@ jobs:
           echo "MACOS_MAJORMINORPATCH=${GitVersion_MajorMinorPatch}" >> "$GITHUB_OUTPUT"
         fi
 
+  package-linux-inst:
+    needs: [semver]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: make installable tarball
+      run: |
+        cd builder
+        tar -xpf Linux.tar.gz
+        cd Linux
+        ./make.sh /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-installable.tgz
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Oolite-Debug-Console-Linux-installable
+        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-installable.tgz
+
+  
+
   package-linux:
     needs: [semver]
     runs-on: ubuntu-latest
