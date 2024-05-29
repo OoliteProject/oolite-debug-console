@@ -20,5 +20,6 @@ Linux builder
     Added how to change conf directory into readme.
     Changed env var in wrapper to OoDC2_CFG_DIR.
     Fixed hardocoded paths which caused fail if installed in /usr or /usr/local
+    Changed to function under github actions.
 Other
     This appeared as 'Tk' in the task switcher on Linux. Set Tk classname.
