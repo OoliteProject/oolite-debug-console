@@ -50,6 +50,8 @@ After the first run (or if you know the packages are already installed),
 
     ./make.sh nocheck
 
+Any other arg1 will be used as the output name for the tarball. Take care!
+
 Either way, it will go on to:
     Create a "build" directory.
     Create a python3 venv in it.
