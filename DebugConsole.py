@@ -18,7 +18,7 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks, cag"
-__version__	= "2.07"
+__version__	= "2.0.7"
 
 import os, sys
 if sys.platform == 'win32' and sys.executable.endswith("pythonw.exe"):
