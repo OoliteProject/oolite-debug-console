@@ -70,9 +70,10 @@ jobs:
         tar -xpf Linux.tar.gz
         cd Linux
         ./make.sh /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-installable.tgz
+
     - uses: actions/upload-artifact@v4
       with:
-        name: Oolite-Debug-Console-Linux-installable
+        name: Oolite-Debug-Console-Linux-Installable
         path: /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-installable.tgz
 
   
@@ -196,7 +197,7 @@ jobs:
         path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos.tgz
 
   release:
-    needs: [semver,package-linux,package-windows,package-macos]
+    needs: [semver,package-linux,package-linux-inst,package-windows,package-macos]
     runs-on: ubuntu-latest
 
     steps:
@@ -234,6 +235,7 @@ jobs:
         prerelease: true
         title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
+          artifacts/Oolite-Debug-Console-Linux-Installable/*.tgz
           artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
           artifacts/Oolite-Debug-Console-MacOs/*.tgz
@@ -260,6 +262,7 @@ jobs:
         prerelease: false
         title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
+          artifacts/Oolite-Debug-Console-Linux-Installable/*.tgz
           artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
           artifacts/Oolite-Debug-Console-MacOs/*.tgz
