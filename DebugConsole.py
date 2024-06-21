@@ -27,10 +27,13 @@ from _version import __version__
 import os, sys #Flibble moved this up near the top in case debug on windows without con.
 FROZEN=hasattr(sys, 'frozen')
 if sys.platform == 'win32' and FROZEN:
-	sys.stdout = sys.stderr #Send all stdout to stderr.
 #	sys.stdout = open(os.devnull, "w");
 	#This is the only "dump it where we are" Flibble investigates: Just keep the exe in a dir :-|
 	sys.stderr = open(os.path.join(os.getcwd(), os.path.basename(sys.argv[0]))+"-stderr.txt", "w")
+	# Send all stdout to stderr needs stderr to exist first.
+	# When frozen with noconsole on 'doze, there's no stdout to begin with!
+	sys.stdout = sys.stderr
+	#... or it may just be that we're not going to win.
 
 import cliArgs as dca #Flibble
 
