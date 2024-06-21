@@ -54,7 +54,7 @@ jobs:
           echo "MACOS_MAJORMINORPATCH=${GitVersion_MajorMinorPatch}" >> "$GITHUB_OUTPUT"
         fi
 
-  package-linux-inst:
+  package-linux:
     needs: [semver]
     runs-on: ubuntu-latest
 
@@ -67,55 +67,15 @@ jobs:
     - name: make installable tarball
       run: |
         cd builder
-        tar -xpf Linux.tar.gz
         cd Linux
-        ./make.sh /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-installable.tgz
+        ./make.sh debdeps
+        ./make.sh onefile Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-x86_64-installable /tmp
 
     - uses: actions/upload-artifact@v4
       with:
-        name: Oolite-Debug-Console-Linux-Installable
-        path: /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-installable.tgz
-
+        name: Oolite-Debug-Console-Linux-x86_64-Installable-onefile
+        path: /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux-x86_64-installable-onefile.tgz
   
-
-  package-linux:
-    needs: [semver]
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout project
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: setup pyenv
-      run: |
-        sudo apt-get install python3-tk python3-venv python3-pip
-        venv="$HOME/python3/pyinstaller"
-        rm -Rf "$venv"  # uncomment to make fresh venv.
-        python3 -m venv "$venv"
-        source "${venv}"/bin/activate
-        pip install pyinstaller
-        pip install twisted
-
-    - name: Build using pyinstaller
-      run: |
-        venv="$HOME/python3/pyinstaller"
-        source "${venv}"/bin/activate
-        pyinstaller \
-        --onefile \
-        --add-binary "oojsc.xbm:." \
-        --add-binary "OoJSC.ico:." \
-        DebugConsole.py
-
-    - name: create archive
-      run: |
-        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux.tgz dist/
-        
-    - uses: actions/upload-artifact@v4
-      with:
-        name: Oolite-Debug-Console-Ubuntu
-        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-linux.tgz
 
   package-windows:
     needs: [semver]
@@ -197,7 +157,7 @@ jobs:
         path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos.tgz
 
   release:
-    needs: [semver,package-linux,package-linux-inst,package-windows,package-macos]
+    needs: [semver,package-linux,package-windows,package-macos]
     runs-on: ubuntu-latest
 
     steps:
@@ -236,7 +196,6 @@ jobs:
         title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
           artifacts/Oolite-Debug-Console-Linux-Installable/*.tgz
-          artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
           artifacts/Oolite-Debug-Console-MacOs/*.tgz
       
@@ -263,7 +222,6 @@ jobs:
         title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
           artifacts/Oolite-Debug-Console-Linux-Installable/*.tgz
-          artifacts/Oolite-Debug-Console-Ubuntu/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
           artifacts/Oolite-Debug-Console-MacOs/*.tgz
 

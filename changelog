@@ -20,6 +20,15 @@ Linux builder
     Added how to change conf directory into readme.
     Changed env var in wrapper to OoDC2_CFG_DIR.
     Fixed hardocoded paths which caused fail if installed in /usr or /usr/local
-    Changed to function under github actions.
 Other
     This appeared as 'Tk' in the task switcher on Linux. Set Tk classname.
+
+2.08
+Brought in some of the stuff from the new alpha.
+    CLI args added. _version.py replaces version file.
+    Wrapper script, tarball, and ENV var gone. See Linux builder readme.
+    Finds icon if running from source & pwd is 'other' than source code dir.
+    Quite a few other fixes. This might break stuff.
+    Tested on LinuxMint with pyenv python 2.7, and normal system python 3.10
+    Seems to work ok on MacOS
+    Will test on Windows and check stderr stuff.
