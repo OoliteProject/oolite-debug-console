@@ -23,12 +23,12 @@ __author__	= "Jens Ayton <jens@ayton.se>, Kaks, cag"
 from _version import __version__
 
 import os, sys #Flibble moved this up near the top in case debug on windows without con.
-if sys.platform == 'win32' and sys.executable.endswith("pythonw.exe"):
-	sys.stdout = open(os.devnull, "w");
-	#This is the only "dump it where we are still in the code" Flibble investigate.
-	sys.stderr = open(os.path.join(os.getcwd(), "stderr-"+os.path.basename(sys.argv[0])), "w")
-
 FROZEN=hasattr(sys, 'frozen')
+if sys.platform == 'win32' and FROZEN:
+	sys.stdout = sys.stderr #Send all stdout to stderr.
+#	sys.stdout = open(os.devnull, "w");
+	#This is the only "dump it where we are" Flibble investigates: Just keep the exe in a dir :-|
+	sys.stderr = open(os.path.join(os.getcwd(), "stderr-"+os.path.basename(sys.argv[0])), "w")
 
 import cliArgs as dca #Flibble
 

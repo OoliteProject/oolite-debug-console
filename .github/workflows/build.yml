@@ -89,6 +89,7 @@ jobs:
     - name: Install pyinstaller
       run: |
         pip install -U pyinstaller
+        pip install -U click
         pip install -U twisted
         pip install -U pywin32
 
@@ -137,6 +138,8 @@ jobs:
 
     - name: Install pyinstaller
       run: |
+        pip install -U click
+        pip install -U twisted
         pip install -U pyinstaller
 
     - name: Build using pyinstaller
