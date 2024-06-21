@@ -19,7 +19,9 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks, cag"
+
 #__version__	= "2.08" #From this version on, will be pulling version from _version file.
+
 from _version import __version__
 
 import os, sys #Flibble moved this up near the top in case debug on windows without con.
@@ -28,7 +30,7 @@ if sys.platform == 'win32' and FROZEN:
 	sys.stdout = sys.stderr #Send all stdout to stderr.
 #	sys.stdout = open(os.devnull, "w");
 	#This is the only "dump it where we are" Flibble investigates: Just keep the exe in a dir :-|
-	sys.stderr = open(os.path.join(os.getcwd(), "stderr-"+os.path.basename(sys.argv[0])), "w")
+	sys.stderr = open(os.path.join(os.getcwd(), os.path.basename(sys.argv[0]))+"-stderr.txt", "w")
 
 import cliArgs as dca #Flibble
 
