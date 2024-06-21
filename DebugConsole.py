@@ -30,8 +30,8 @@ if sys.platform == 'win32' and FROZEN:
 #	sys.stdout = open(os.devnull, "w");
 	#This is the only "dump it where we are" Flibble investigates: Just keep the exe in a dir :-|
 	sys.stderr = open(os.path.join(os.getcwd(), os.path.basename(sys.argv[0]))+"-stderr.txt", "w")
-	#Send all stdout to stderr needs stderr to exist first.
-	When frozen with noconsole on 'doze, there's no stdout to begin with!
+	# Send all stdout to stderr needs stderr to exist first.
+	# When frozen with noconsole on 'doze, there's no stdout to begin with!
 	sys.stdout = sys.stderr
 	#... or it may just be that we're not going to win.
 
