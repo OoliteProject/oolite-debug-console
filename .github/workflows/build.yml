@@ -54,7 +54,7 @@ jobs:
           echo "MACOS_MAJORMINORPATCH=${GitVersion_MajorMinorPatch}" >> "$GITHUB_OUTPUT"
         fi
 
-  package-linux:
+  package-linux-x86_64:
     needs: [semver]
     runs-on: ubuntu-latest
 
@@ -125,7 +125,7 @@ jobs:
         name: Oolite-Debug-Console-Windows
         path: Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-win.zip
 
-  package-macos:
+  package-macos-arm64:
     needs: [semver]
     runs-on: macos-latest
 
@@ -149,15 +149,15 @@ jobs:
 
     - name: create archive
       run: |
-        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos.tgz dist/
+        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-arm64.tgz dist/
 
     - uses: actions/upload-artifact@v4
       with:
-        name: Oolite-Debug-Console-MacOs
-        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos.tgz
+        name: Oolite-Debug-Console-MacOs-arm64
+        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-arm64.tgz
 
   release:
-    needs: [semver,package-linux,package-windows,package-macos]
+    needs: [semver,package-linux-x86_64,package-windows,package-macos-arm64]
     runs-on: ubuntu-latest
 
     steps:
@@ -195,9 +195,9 @@ jobs:
         prerelease: true
         title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
-          artifacts/Oolite-Debug-Console-Linux-Installable/*.tgz
+          artifacts/Oolite-Debug-Console-Linux-x86_64-Installable/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
-          artifacts/Oolite-Debug-Console-MacOs/*.tgz
+          artifacts/Oolite-Debug-Console-MacOs-arm64/*.tgz
       
     - name: Remove old releases
       if: github.ref == 'refs/heads/master'
@@ -221,7 +221,7 @@ jobs:
         prerelease: false
         title: "Debug Console v${{ needs.semver.outputs.GITVERSION_SEMVER }}"
         files: |
-          artifacts/Oolite-Debug-Console-Linux-Installable/*.tgz
+          artifacts/Oolite-Debug-Console-Linux-x86_64-Installable/*.tgz
           artifacts/Oolite-Debug-Console-Windows/*.zip
-          artifacts/Oolite-Debug-Console-MacOs/*.tgz
+          artifacts/Oolite-Debug-Console-MacOs-arm64/*.tgz
 
