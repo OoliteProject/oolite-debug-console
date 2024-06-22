@@ -1,4 +1,4 @@
-This is a major revision of version 2.
+This is a major fluffing of version 2.
 
 Default file save locations are preset within $HOME/.Oolite on all paltforms. They can be changed. See below. Previous versions put the config and logs in whatever the working directory happened to be, which was for some at least, suboptimal.
 
@@ -42,5 +42,6 @@ On Mac, if not launching from a terminal in the first place, a console is create
 
 On Windows, to avoid launching a console, standard output and standard error (STDOUT and STDERR) have nowhere to go, and cannot be used. This renders the app unable to send out help or errors until the main log file is open. Using the Windows executable by double-clicking will create a text file in the launching directory for standard input and output. In normal circumstances it should remain empty. If you drop the executable on cmd or powershell and give it an argument (like -h), the output will go into a file in whatever the current working directory is in that console. You can create a shortcut with arguments to change the options shown in the help, and that shortcut can make the current working directory such that the stdio txt file will be created out of harms way.
 
+I would advise you to stay clear of the Aliases menu. All aliases/functions I tried to define there would fire non-stop.
 
 Hopefully this is nearly feature complete, and should be stable in short order.
