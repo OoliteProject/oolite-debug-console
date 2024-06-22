@@ -74,7 +74,7 @@ commonparts(){
  mkdir -p bin &&
   mkdir -p share/applications &&
    mkdir -p share/icons/hicolor/256x256/apps &&
-    echo "$desktop" > share/applications/OoDC.desktop &&
+    echo "$desktop" > share/applications/$basename.desktop &&
      cp ../../../../OoJSC256x256.png share/icons/hicolor/256x256/apps/$basename-icon.png ||
  q "commonparts : failed to make output tree"
 }
