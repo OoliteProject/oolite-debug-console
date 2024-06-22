@@ -1,8 +1,6 @@
-Nearly ready to merge with the mothership.
+This is a major revision of version 2.
 
-I've brought in some good stuff from the alpha and pushed a few things back from lessons learned.
-
-Default file save locations are preset preset within $HOME/.Oolite on all paltforms.
+Default file save locations are preset within $HOME/.Oolite on all paltforms.
 
 CLI args have been added to allow file locations/debug etc. to be set. Should work in icons/launchers as well as on the command line.
 
@@ -38,6 +36,11 @@ App now has an icon in task switcher if running from source when pwd is 'other' 
 
 Running via python from another pwd, it now finds it's icons.
 
-On Linux 'installable' builder, the wrapper script and ENV var are gone. The install make script can simply spit out a desktop file if you want to run from source and have a pretty icon in your application menus.
+On Linux 'installable' builder, the wrapper script and ENV var are gone. The builder make script in the source can simply spit out a desktop file if you want to run directy from source and have a pretty icon in your application menus. If enough people ask, I'll give clearer instructions for that, or maybe even write a very simple installer to put a copy of the source in ~/.local/lib, symlink the main python script into ~/.local/bin, the desktop file in ~/.local/share/applications, and the icon place in... oh you can guess that! /usr/local will work too of course.
 
-Lots of other fixes.
+On windows, to avoid launching a console, standard output and standard error (STDOUT and STDERR) have nowhere to go, and cannot be used. This renders the app unable to send out help or errors until the main log file is open. Using the Windows executable by double-clicking will create a text file in the launching directory for standard input and output. In normal circumstances it should remain empty. If you drop the executable on cmd or powershell and give it an argument (like -h), the output will go into a file in whatever the current working directory is in that console. You can create a shortcut with arguments to change the options shown in the help, and that shortcut can make the current working directory such that the stdio txt file will be created out of harms way.
+
+On Mac, a console is created if not launching from a terminal in the first place. It's a bit of a pain to dig into an app bundle to do command line arguments.
+
+Hopefully this is nearly feature complete, and should be stable in short order.
+
