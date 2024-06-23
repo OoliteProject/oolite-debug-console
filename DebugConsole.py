@@ -2367,27 +2367,38 @@ class AppWindow(Frame):
 		elif addUndo:	# call initated by user, not undo mechanism
 			self.aliasDefinition.set(self.aliasDefns[alias])
 			self.aliasMsgStr.set("'{}' unchanged".format(alias))
-
-	def defaultPolling(self, aliasDef):
-		if len(aliasDef) == 0:
-			return True
-		return not aliasDef.startswith('system.') and not aliasDef.startswith('worldScripts.')
+	
+	NO_ALIAS_FN_POLLING = compile(r'(?xs) [^f]* function | [^(]*[(]\s*function')
+	def isAliasExec(self, defn):
+		return self.NO_ALIAS_FN_POLLING.search(defn) is not None
+	
+	def defaultPolling(self, defn):		
+		# set default based on: system... is dynamic
+		#   worldScript... is usually static w/ one '.', unknowable otherwise
+		#   never poll executables!
+		if len(defn) == 0 or \
+			(defn.startswith('worldScripts.') and defn.count('.') == 1 ) or \
+			self.isAliasExec(defn):
+			return False
+		return defn.startswith('system.')
 
 	def isAliasPolled(self, alias):
 		return self.aliasesPolled[alias] if alias in self.aliasesPolled else self.defaultPolling(self.aliasDefns.get(alias, ''))
 		
 	def toggleAliasPoll(self):				# handler for 'polled' Checkbutton
 		alias = self.newAliasName.get().strip()
-		if len(alias):
+		if len(alias) and not self.isAliasExec(self.aliasDefns.get(alias, '')):
 			polled = self.isAliasPolled(alias)
 			self.pollAliasVar.set(1 if not polled else 0)
 			self.aliasesPolled[alias] = not polled
+		else:
+			self.pollAliasVar.set(0)
 	
 	def setAliasPoll(self, alias=None):
 		alias = alias or self.newAliasName.get().strip()
-		polled = True
+		polled = False
 		if len(alias):
-			polled = self.isAliasPolled(alias)
+			polled = self.isAliasPolled(alias) and not self.isAliasExec(self.aliasDefns.get(alias, ''))
 			self.pollAliasVar.set(1 if polled else 0)
 			self.aliasesPolled[alias] = polled
 		return polled
