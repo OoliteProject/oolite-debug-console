@@ -1,6 +1,6 @@
 This is a major fluffing of version 2.
 
-Default file save locations are preset within $HOME/.Oolite on all paltforms. They can be changed. See below. Previous versions put the config and logs in whatever the working directory happened to be, which was for some at least, suboptimal.
+Default file save locations are preset within $HOME/.Oolite on all platforms. They can be changed. See below. Previous versions put the config and logs in whatever the working directory happened to be, which was for some at least, suboptimal.
 
 CLI args have been added to allow file locations/debug etc. to be changed. This should work in icons/launchers as well as on the command line.
 
