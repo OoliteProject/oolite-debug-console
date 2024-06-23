@@ -91,7 +91,8 @@ jobs:
         pip install -U pyinstaller
         pip install -U click
         pip install -U twisted
-        pip install -U pywin32
+
+#Flibble. Wonder if this is actually used now?        pip install -U pywin32
 
     # in Windows PowerShell the backtick indicates a multiline command
     # see https://stackoverflow.com/questions/3235850/how-to-enter-a-multi-line-command

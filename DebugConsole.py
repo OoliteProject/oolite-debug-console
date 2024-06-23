@@ -2324,7 +2324,7 @@ class AppWindow(Frame):
 			return False
 		defn = defn.replace('"', "\'")	# need double quotes to submit alias (else syntax error)
 		defn = defn.replace("'", "\'")
-		defn = defn.replace("`", "\`")
+		defn = defn.replace("`", r"\`")
 		return defn
 			
 	def aliasEntryAdd(self): 			# 'Add' button or <Return> in aliasDefineEntry
