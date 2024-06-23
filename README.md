@@ -6,6 +6,8 @@ CLI args have been added to allow file locations/debug etc. to be changed. This 
 
 The CLI output is not directly visible on the Windows executable version, since that has no console. For now, all output that 'would' go to STDOUT and STDERR goes into a text file in the working directory.
 
+To run from source, click and twisted need to be installed.
+
 ```
 # Running from source directory in a linux xterm to get the help 
 ./DebugConsole.py -h
