@@ -2368,22 +2368,28 @@ class AppWindow(Frame):
 
 	NO_ALIAS_FN_POLLING = compile(r'(?xs) [^f]* function | [^(]*[(]\s*function')
 	def isAliasExec(self, defn):
+		print("FLIBBLEDEBUG a1")
 		return self.NO_ALIAS_FN_POLLING.search(defn) is not None
 
 	def defaultPolling(self, defn):
 		# set default based on: system... is dynamic
 		#   worldScript... is usually static w/ one '.', unknowable otherwise
 		#   never poll executables!
+		print("FLIBBLEDEBUG in defaultPolling")
 		if len(defn) == 0 or \
 			(defn.startswith('worldScripts.') and defn.count('.') == 1 ) or \
 				self.isAliasExec(defn):
+			print("FLIBBLEDEBUG a2")
 			return False
+		print("FLIBBLEDEBUG a3")
 		return defn.startswith('system.')
 
 	def isAliasPolled(self, alias):
+		print ("FLIBBLEDEBUG POLLED " + str(self.aliasesPolled))
 		return self.aliasesPolled[alias] if alias in self.aliasesPolled else self.defaultPolling(self.aliasDefns.get(alias, ''))
 
 	def toggleAliasPoll(self):				# handler for 'polled' Checkbutton
+		print("FLIBBLEDEBUG in toggleAliasPoll")
 		alias = self.newAliasName.get().strip()
 		if len(alias) and not self.isAliasExec(self.aliasDefns.get(alias, '')):
 			polled = self.isAliasPolled(alias)
@@ -2399,6 +2405,7 @@ class AppWindow(Frame):
 			polled = self.isAliasPolled(alias) and not self.isAliasExec(self.aliasDefns.get(alias, ''))
 			self.pollAliasVar.set(1 if polled else 0)
 			self.aliasesPolled[alias] = polled
+		print("FLIBBLEDEBUG setAliasPoll IS aliasesPolled[alias]=:" + self.aliasesPolled[alias] + " POLLED=", polled)
 		return polled
 
 	aliasUndo = []
@@ -2419,6 +2426,7 @@ class AppWindow(Frame):
 		self.updateAliasButtons()
 
 	def selectAlias(self, event=None):	# <Double-ButtonRelease-1>/<Return> in listbox
+		print("FLIBBLEDEBUG in selectAlias ")
 		currSelection = self.aliasListBox.curselection() # returns tuple w/ indices of the selected element(s)
 		if len(currSelection) > 0:
 			alias = self.aliasListBox.get(currSelection[0])
@@ -2506,24 +2514,34 @@ class AppWindow(Frame):
 
 	aliasRegistry = {}					# dict of TkVars flags indicating successful registration
 	def sendAliasRegistration(self, alias, followUp=True, poll=False):	# followUp is False only when initializing
+		print("FLIBBLEDEBUG in sendAliasRegistration alias=" + str(alias))
 		if self.connectedToOolite:
 			if not poll:
+				print("FLIBBLEDEBUG in sendAliasRegistration if not poll")
 				self.aliasRegStr.set('')
 			if alias in self.aliasDefns:
+				print("FLIBBLEDEBUG in sendAliasRegistration if alias in self.aliasDefns")
 				if alias not in self.aliasRegistry:
+					print("FLIBBLEDEBUG in sendAliasRegistration : alias not in aliasRegistry")
 					self.aliasRegistry[alias] = IntVar(name='aliasReg_'+str(len(self.aliasRegistry))+'_'+alias)	# 0 => not registered
 				defn = self.aliasDefns[alias].replace('\n', ' ')
 				cmd = '''eval("console.script.{} = {}")'''.format(alias, defn)
 				self.queueSilentCmd(cmd, 'alias-{}-{}'.format(alias, 'poll' if poll else 'send'))
 				if followUp and not poll:
+					print("FLIBBLEDEBUG in sendAliasRegistration sendRegistryCheck")
 					self.sendRegistryCheck(alias)
-				#FLIBBLEDEBUG return True This if was inserted by Flibble. It should not be needed.
+				print("FLIBBLEDEBUG in sendAliasRegistration return True : poll=", poll)
+				print("FLIBBLEDEBUG in sendAliasRegistration CHECKING THAT! calling isAliasPolled", self.isAliasPolled(alias))
+				#FLIBBLEDEBUG return True
 				if self.isAliasPolled(alias):
+					print ("FLIBBLEDEBUG in sendAliasRegistration :return True :(")
 					return True
+				print ("FLIBBLEDEBUG in sendAliasRegistration :return False at last")
 				return False
 				#END FLIBBLEDEBUG
 		elif not poll:
 			self.aliasRegStr.set('not connected')
+		print("FLIBBLEDEBUG in sendAliasRegistration return False")
 		return False
 
 	def reportRegistration(self, alias):# report on status of alias
@@ -2652,13 +2670,17 @@ class AppWindow(Frame):
 
 	aliasPollsPending = {}
 	def pollAliases(self, count):
+		print("FLiBBLEDEBUG in pollAliases: count=" + str(count) + "")
 		if self.connectedToOolite:
 			if len(self.aliasPollQueue) == 0:	# create new queue
 				self.aliasPollQueue = OrderedDict(sorted([(k,v) for k,v in self.aliasDefns.items() \
 											if k in self.aliasesPolled], key=lambda t: t[0]))
+			print("FLiBBLEDEBUG in pollAliases: aliasPollQueue=" + str(self.aliasPollQueue) )
 			while count > 0 and len(self.aliasPollQueue) > 0:
 				alias, defn = self.aliasPollQueue.popitem(last=False) # False => FIFO
+				print("FLiBBLEDEBUG in pollAliases loop: alias=" + str(alias) )
 				if self.sendAliasRegistration(alias, poll=True):
+					print("FLiBBLEDEBUG in pollAliases if: alias=" + str(alias) + " Poll is true")
 					self.aliasPollsPending[alias] = clock() if Python2 else perf_counter()
 					count -= 1
 
@@ -4115,6 +4137,7 @@ class AppWindow(Frame):
 				else:
 					self.aliasesPolled[ key ] = polled.lower() != 'n'
 					opt['Aliases'][key] = self.aliasDefns[ key ] = aliasDef
+				print("FLIBBLEDEBUG cfg.options polled=" + polled)
 			self.loadedConfig = self.copyConfig()	# save copy to detect changes on Save Config Now
 
 		except Exception as exc:
