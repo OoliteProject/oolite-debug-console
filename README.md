@@ -1,12 +1,14 @@
 This is a major fluffing of version 2.
 
+This version should work with python 2.7 and >3.6.
+
 Default file save locations are preset within $HOME/.Oolite on all platforms. They can be changed. See below. Previous versions put the config and logs in whatever the working directory happened to be, which was for some at least, suboptimal.
 
 CLI args have been added to allow file locations/debug etc. to be changed. This should work in icons/launchers as well as on the command line.
 
 The CLI output is not directly visible on the Windows executable version, since that has no console. For now, all output that 'would' go to STDOUT and STDERR goes into a text file in the working directory.
 
-To run from source, click and twisted need to be installed.
+To run from source, click and twisted need to be installed. On Debian/Ubuntu systems, assuming python3 is installed, you may need to apt install python3-tk
 
 ```
 # Running from source directory in a linux xterm to get the help 
