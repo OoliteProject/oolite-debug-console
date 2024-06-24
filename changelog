@@ -32,3 +32,5 @@ Brought in some of the stuff from the new alpha.
     Tested on LinuxMint with pyenv python 2.7, and normal system python 3.10
     Seems to work ok on MacOS
     Will test on Windows and check stderr stuff.
+
+Further changes tracked on github

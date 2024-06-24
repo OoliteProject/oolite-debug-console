@@ -7,19 +7,29 @@ Parses cli args. Sets defaults for filepaths.
 
 # Do not import anything which is intended to be set up by values created here
 
-from pathlib import Path
+import sys
+Python2 = sys.version_info[0] == 2
+if Python2:
+    from pathlib2 import Path
+else:
+    from pathlib import Path
+
 import re
 import click
 import os
 #Might want to do this properly, with __version__ file.
 from _version import __version__
-import sys
 
 # set up globals with sane defaults using same names as click
+#Doen't work in 2.7 _HOME=Path.home()
+#Doen't work in 2.7 _DEFPATH = os.path.join(_HOME, '.Oolite', 'DebugConsole2')
+_HOME=os.path.expanduser("~") # Allows for python 2.7
+_DEFPATH = os.path.join(_HOME, '.Oolite', 'DebugConsole2')
+
 g = dict(
   base = "OoDebugConsole",
-  cpath = str(Path.home() / '.Oolite/DebugConsole2'),
-  lpath = str(Path.home() / '.Oolite/DebugConsole2'),
+  cpath = _DEFPATH,
+  lpath = _DEFPATH,
   cext = 'cfg',
   hext = 'dat',
   lext = 'log',
@@ -103,7 +113,7 @@ def cli(base,cpath,lpath,cext,lext,hext,debug):
   global shouldquit
   shouldquit=False
 
-def exec():
+def execc(): # in python 2.7 exec is reserved
 
   global shouldquit
   shouldquit=True
@@ -142,7 +152,8 @@ def isDir(thisdir,key):
       print('Could not find directory "' + thisdir 
         + ' for option --' + key + '. Attempting to create it.')
     try:
-      os.makedirs(thisdir, exist_ok = True)
+#      os.makedirs(thisdir, exist_ok = True)
+      Path(thisdir).mkdir(exist_ok=True) # works in 2.7 with pathlib2
       g[key] = thisdir
       if g['debug']:
         print("Directory " , thisdir ,  " Created ")
@@ -166,8 +177,7 @@ def isExt(ext,key):
       raise click.BadParameter('Invalid file extension.\n', param_hint=["--" + key])
 
 
-exec()
-
+execc()
 
 #  con.BASE_FNAME = base
 #if __name__ == '__main__':

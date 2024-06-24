@@ -1398,7 +1398,7 @@ class AppWindow(Frame):
 			if meipass:
 				iconPath = os.path.join(meipass, iconFile)
 		else:
-			iconPath = os.path.join(SCRIPTPATH, iconFile)
+			iconPath = os.path.join(SCRIPTPATH, "images", iconFile)
 
 		# Under Windows, the DEFAULT parameter can be used to set the icon
 		# for the widget and any descendents that don't have an icon set
@@ -1409,7 +1409,7 @@ class AppWindow(Frame):
 				top.iconbitmap(default=iconPath)
 			except:
 				try:
-					top.iconbitmap(default=os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+					top.iconbitmap(default=os.path.join(os.path.dirname(sys.argv[0]), "images", iconFile))
 				except:
 					try:
 						top.iconbitmap(default='@oojsc.xbm')
@@ -1424,7 +1424,7 @@ class AppWindow(Frame):
 					top.iconbitmap(iconPath)
 				except:
 					try:
-						top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+						top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), "images", iconFile))
 					except:
 						try:
 							top.iconbitmap('@oojsc.xbm')

@@ -8,7 +8,9 @@ CLI args have been added to allow file locations/debug etc. to be changed. This 
 
 The CLI output is not directly visible on the Windows executable version, since that has no console. For now, all output that 'would' go to STDOUT and STDERR goes into a text file in the working directory.
 
-To run from source, click and twisted need to be installed. On Debian/Ubuntu systems, assuming python3 is installed, you may need to apt install python3-tk
+To run from source, click and twisted need to be installed via pip. On Debian/Ubuntu systems, assuming python3 is installed, you may need to apt install python3-tk
+
+On Python 2.7 pathlib2 is required
 
 ```
 # Running from source directory in a linux xterm to get the help 
@@ -49,3 +51,4 @@ On Windows, to avoid launching a console, standard output and standard error (ST
 I would advise you to stay clear of the Aliases menu. All aliases/functions I tried to define there would fire non-stop.
 
 Hopefully this is nearly feature complete, and should be stable in short order.
+

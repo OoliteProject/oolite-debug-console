@@ -1398,7 +1398,7 @@ class AppWindow(Frame):
 			if meipass:
 				iconPath = os.path.join(meipass, iconFile)
 		else:
-			iconPath = os.path.join(SCRIPTPATH, iconFile)
+			iconPath = os.path.join(SCRIPTPATH, "images", iconFile)
 
 		# Under Windows, the DEFAULT parameter can be used to set the icon
 		# for the widget and any descendents that don't have an icon set
@@ -1409,9 +1409,10 @@ class AppWindow(Frame):
 				top.iconbitmap(default=iconPath)
 			except:
 				try:
-					top.iconbitmap(default=os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+					top.iconbitmap(default=os.path.join(os.path.dirname(sys.argv[0]), "images", iconFile))
 				except:
 					try:
+						print("FLIBBLEDEBUG FALLING BACK ON XBM WILL FAIL")
 						top.iconbitmap(default='@oojsc.xbm')
 					except:
 						pass
@@ -1424,9 +1425,10 @@ class AppWindow(Frame):
 					top.iconbitmap(iconPath)
 				except:
 					try:
-						top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+						top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), "images", iconFile))
 					except:
 						try:
+							print("FLIBBLEDEBUG FALLING BACK ON XBM WILL FAIL")
 							top.iconbitmap('@oojsc.xbm')
 						except:
 							pass
@@ -4151,6 +4153,7 @@ class AppWindow(Frame):
 		return config	
 		
 	def saveConfigFile(self):
+		print("FLIBBLEDEBUG IN SAVE CONFIG")
 		writing = False
 		try:
 			opt, col, font = self.localOptions, self.COLORS, self.FONTS
@@ -4160,12 +4163,14 @@ class AppWindow(Frame):
 				#   still have to update that one option
 				writing = True
 				cfg = self.initCfgParser()
+				print("FLIBBLEDEBUG IN SAVE CONFIG: writing = true")
 				if cfg.get('Settings','AliasWindow') == DEFAULT_ALIAS_POSN:
 					cfg.remove_option('Settings','AliasWindow') # don't save any until user has opened
 			else:
 				return
 			
 			if opt['SaveConfigOnExit'] or opt['SaveConfigNow']:	## all values must be strings
+				print("FLIBBLEDEBUG IN SAVE CONFIG: 001")
 				cfg.set('Settings', 'SaveConfigOnExit',  'yes' if opt['SaveConfigOnExit'] else 'no')
 				cfg.set('Settings', 'PlistOverrides', 	 'yes' if opt['PlistOverrides'] else 'no')
 				# cfg.set('Settings', 'MaxHistoryCmds', 	 str(MAX_HIST_CMDS)) # not set by user via app
@@ -4194,6 +4199,7 @@ class AppWindow(Frame):
 					cfg.set('Aliases', key, '{}:{}'.format('P' if self.aliasesPolled.get(key, True) else 'N', value))
 
 			elif self.saveConfigRead:  # update that option only
+				print("FLIBBLEDEBUG IN SAVE CONFIG: Part3 read")
 				with open(CFGFILE, 'r') as fp:
 					if Python2:
 						cfg.readfp(fp)
@@ -4201,7 +4207,10 @@ class AppWindow(Frame):
 						cfg.read_file(fp)
 				cfg.set('Settings', 'SaveConfigOnExit', 'no')
 
+			print("FLIBBLEDEBUG IN SAVE CONFIG: at crux:")
+
 			if writing and (opt['SaveConfigNow'] or self.optionsChanged()):
+				print("FLIBBLEDEBUG IN SAVE CONFIG: Part4 write")
 				fp = open(nextVersion(CFG_BASE, CFG_EXT), 'w')
 				cfg.write(fp)
 				fp.close()
@@ -4214,6 +4223,12 @@ class AppWindow(Frame):
 				
 	def optionsChanged(self):		# check if any options have changed before writing
 		orig, curr = self.loadedConfig, self.localOptions
+		#FLIBBLEDEBUG BLOCK START
+		if orig == curr:
+		    print("FLIBBLEDEBUG IT'S ALL THE SAME")
+		else:
+		    print("FLIBBLEDEBUG SOMETHING DIFFERS")
+		#FLIBBLEDEBUG BLOCK END
 		if len(orig['Aliases']) != len(self.aliasDefns):
 			return True
 		for key, value in self.aliasDefns.items():
@@ -4224,9 +4239,12 @@ class AppWindow(Frame):
 				return True
 			if str(self.aliasWindow.mouseXY) != orig['AliasWindow']:
 				return True
+		print("FLIBBLEDEBUG BOTH orig=" + str(orig) + "curr=" + str(curr)  )
 		for key, value in curr.items():
 			if key == 'SaveConfigNow': continue	# dummy option for making menu, never saved
+			print ("FLIBBLEDEBUG optionsChanged testing key=", str(key), "in orig? ", key in orig, "orig[key]=", str(orig[key]), "value=", value)
 			if key in orig and orig[key] != value:
+				print ("FLIBBLEDEBUG WE HAVE A CHANGE!")
 				return True
 		return False
 
