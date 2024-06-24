@@ -138,28 +138,16 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Install pyinstaller
+    - name: make installable tarball
       run: |
-        pip install -U click
-        pip install -U twisted
-        pip install -U pyinstaller
-
-    - name: Build using pyinstaller
-      run: |
-        pyinstaller \
-        --onefile \
-        --add-binary "images/oojsc.xbm:." \
-        --add-binary "images/OoJSC.ico:." \
-        DebugConsole.py
-
-    - name: create archive
-      run: |
-        tar cvfz Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-arm64.tgz dist/
+        cd builder
+        cd Mac
+        ./make.sh app Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-app-arm64 /tmp
 
     - uses: actions/upload-artifact@v4
       with:
         name: Oolite-Debug-Console-MacOs-arm64
-        path: ./Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-arm64.tgz
+        path: /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-app-arm64.tgz
 
   release:
     needs: [semver,package-linux-x86_64,package-windows,package-macos-arm64]

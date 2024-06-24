@@ -49,10 +49,8 @@ print(__version__)
 onefile(){
 step="making executable"
 echo "$step"
-pyinstaller --name "$basename" --onefile "${relpath}$inscript" \
- --add-binary "${relpath}/images/oojsc.xbm:." --add-binary "${relpath}/images/OoJSC.ico:." \
- --add-binary "${relpath}/images/OoJSC256x256.png:." &&
-tarname="$tarbase-onefile.tgz"
+pyinstaller --name "$basename" --onefile "${relpath}$inscript" &&
+tarname="$tarbase-onefile.tgz" &&
 tar -C "$builddir/dist" --numeric-owner --dereference \
  -cpzf "$tardir/$tarname" . || q "$failed $step"
 mv  dist/$basename $basedir &&
@@ -68,11 +66,30 @@ A tarball is at '$tardir/$tarname'.
 " || q "$step"
 }
 
+appbundle(){
+step="making appbundle"
+echo "$step"
+pyinstaller --name "$basename" --onefile "${relpath}$inscript" \
+ --windowed --icon "${relpath}/images/OoJSC.icns" || q "failed appbundle"
+tarname="$tarbase-app.tgz" &&
+tar -C "$builddir/dist" --numeric-owner --dereference \
+ -cpzf "$tardir/$tarname" ${basename}.app || q "$failed $step"
+#mv  dist/$basename $basedir &&
+echo "
+Finished $step.
+
+A tarball is at '$tardir/$tarname'.
+
+" || q "$step"
+}
+
 #Arg 1 chooses action. clean or dist.
 case "$1" in
     clean) cleaner ;; # remove entire build directory
-    dist) cleaner && setupvars && prep && onefile ;;
-    *) q "Setup: Invalid arg 1: [clean|dist]" ;;
+    onefile) cleaner && setupvars && prep && onefile ;;
+    app) cleaner && setupvars && prep && appbundle ;;
+    dist) cleaner && setupvars && prep && onefile && rm -Rf build/build && appbundle ;;
+    *) q "Setup: Invalid arg 1: [clean|onefile|appbundle|dist]" ;;
 esac
 
 #end
