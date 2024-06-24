@@ -34,7 +34,7 @@ Options:
   -h, -?, --help    Show this message and exit.
 ```
 
-The paths will differ on other platforms.
+The paths will differ on other platforms. The defaults will settle in the next update.
 
 App now has an icon in task switcher if running from source when the working directory is 'other' than source code dir.
 
