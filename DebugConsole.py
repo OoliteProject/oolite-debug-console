@@ -225,6 +225,7 @@ defaultConfig = OrderedDict((
 				('_PlistOverrides_', 	'if Yes, colors and fonts are replaced with those received from Oolite'),
 				('PlistOverrides', 		'No'),
 				('MaxBufferSize', 		'200000'),
+				('DebugToggle', 		'No'),
 		   ))
 		  ),
 		  ('Font', OrderedDict((
@@ -1909,6 +1910,7 @@ class AppWindow(Frame):
 		'ResetCmdSizeOnRun': True,		# reset cmdLine's size after cmd is run
 		'MsWheelHistory': False,		# allow mouse wheel to scroll through cmd history
 		'PlistOverrides': True,
+		'DebugToggle': False,
 		'Aliases': {},
 	}
 	localOptnText = OrderedDict((
@@ -1955,12 +1957,25 @@ class AppWindow(Frame):
 		self.addTraceTkVar(self.scriptPropsStr, self.loadScriptProps)
 
 		menu.add_separator()
-		self.logDebugMsgs = IntVar(name='logDebugMsgs', value=(1 if debugLogger.getEffectiveLevel() == DEBUG else 0))
-		menu.add_checkbutton(label='toggle debug messsages', variable=self.logDebugMsgs, command=toggleDebugMsgs)
+		areDebugging = opt['DebugToggle']
+		# synchronize menu value w/ cli arg; --debug will not lead to config file
+		# value changing (that would require user action of double toggling menu)
+		loggerLevel = debugLogger.getEffectiveLevel()
+		if areDebugging and loggerLevel != DEBUG:
+			toggleDebugMsgs()
+		elif not areDebugging and loggerLevel == DEBUG:
+			areDebugging = True
+		self.logDebugMsgs = IntVar(name='logDebugMsgs', value=(1 if areDebugging else 0))
+		menu.add_checkbutton(label='toggle debug messsages', variable=self.logDebugMsgs, 
+					   		 command=self.reverseDebugState)
 
 		## rest is debugging, to be deleted
 		if dca.g['debug']:
 			menu.add_command(label='open debugger', command=setTrace)
+
+	def reverseDebugState(self, *args):
+		self.localOptions['DebugToggle'] = self.logDebugMsgs.get()
+		toggleDebugMsgs()
 
 	def setOptionFromCheckButton(self, varName, tkVar):
 		value = tkVar.get()
@@ -2107,6 +2122,7 @@ class AppWindow(Frame):
 		self.aliasDefineEntryUndo.grid(		row=4,	column=2, 	sticky=SE, 	padx=2)
 		self.aliasDefineEntryAdd.grid(		row=4,	column=3, 	sticky=SE, 	padx=2)
 
+		self.aliasWindow.bind('<Configure>', lambda event: self.saveAliasPosn(event))
 		aliasList.bind('<Return>', self.selectAlias)
 		aliasList.bind('<Double-ButtonRelease-1>', self.selectAlias)
 		aliasList.bind('<<ListboxSelect>>', self.lookupAlias)
@@ -2119,6 +2135,21 @@ class AppWindow(Frame):
 			mouseXY = self.loadedConfig['AliasWindow'].strip('[]')
 			self.aliasWindow.mouseXY = list(map(int, mouseXY.split(',')))
 
+	saveAPafterID = None
+	def saveAliasPosn(self, event=None):
+		# this check can go first as there is no other <Configure> binding
+		if self.saveAPafterID is not None:		return
+		if not hasattr(event, 'widget'):		return
+		if event.widget != self.aliasWindow:	return 
+		# <Configure> events fire quite rapidly while window is in motion
+		# we wait for half a second
+		self.saveAPafterID = self.top.after(500, self.doSaveAPposn)
+	
+	def doSaveAPposn(self, event=None):
+		self.saveAPafterID = None
+		self.aliasWindow.savePosition()
+		self.localOptions['AliasWindow'] = self.aliasWindow.mouseXY
+	
 	def resetAliasEntry(self, focus=True):# handler for 'Clear' button
 		self.aliasDefinition.set('')
 		self.aliasValue.set('')
@@ -4094,6 +4125,7 @@ class AppWindow(Frame):
 			opt['MsWheelHistory'] =  	cfg.getboolean('Settings','MsWheelHistory')
 			opt['PlistOverrides'] = 	cfg.getboolean('Settings','PlistOverrides')
 			self.maxBufferSize = 		cfg.getint('Settings','MaxBufferSize')
+			opt['DebugToggle'] =		cfg.getboolean('Settings','DebugToggle')
 
 			opt['Family'] =	font['Family'] = cfg.get('Font','Family')
 			opt['Size']   =	font['Size'] =   cfg.getint('Font','Size')
@@ -4137,7 +4169,7 @@ class AppWindow(Frame):
 				#   still have to update that one option
 				writing = True
 				cfg = self.initCfgParser()
-				if cfg.get('Settings','AliasWindow') == DEFAULT_ALIAS_POSN:
+				if opt.get('AliasWindow', DEFAULT_ALIAS_POSN) == DEFAULT_ALIAS_POSN:
 					cfg.remove_option('Settings','AliasWindow') # don't save any until user has opened
 			else:
 				return
@@ -4157,6 +4189,7 @@ class AppWindow(Frame):
 				cfg.set('Settings', 'ResetCmdSizeOnRun', 'yes' if opt['ResetCmdSizeOnRun'] else 'no')
 				cfg.set('Settings', 'MsWheelHistory', 	 'yes' if opt['MsWheelHistory'] else 'no')
 				cfg.set('Settings', 'MaxBufferSize', 	 str(self.maxBufferSize))
+				cfg.set('Settings', 'DebugToggle', 	 	'yes' if opt['DebugToggle'] else 'no')
 
 				cfg.set('Font', 'Family', font['Family'])
 				cfg.set('Font', 'Size',   str(font['Size']))
@@ -4200,6 +4233,13 @@ class AppWindow(Frame):
 			if 'AliasWindow' not in orig: 			# not in config file
 				return True
 			if str(self.aliasWindow.mouseXY) != orig['AliasWindow']:
+				return True
+		col, font = self.COLORS, self.FONTS
+		for key, value in col.items():
+			if key in orig and orig[key] != value:
+				return True
+		for key, value in font.items():
+			if key in orig and orig[key] != value:
 				return True
 		for key, value in curr.items():
 			if key == 'SaveConfigNow': continue	# dummy option for making menu, never saved
