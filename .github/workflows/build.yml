@@ -142,12 +142,12 @@ jobs:
       run: |
         cd builder
         cd MacOS
-        ./make.sh app Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-app-arm64 /tmp
+        ./make.sh app Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-arm64 /tmp
 
     - uses: actions/upload-artifact@v4
       with:
         name: Oolite-Debug-Console-MacOs-arm64
-        path: /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-app-arm64.tgz
+        path: /tmp/Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-arm64-app.tgz
 
   release:
     needs: [semver,package-linux-x86_64,package-windows,package-macos-arm64]
