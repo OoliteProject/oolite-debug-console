@@ -141,7 +141,7 @@ jobs:
     - name: make installable tarball
       run: |
         cd builder
-        cd Mac
+        cd MacOS
         ./make.sh app Oolite-Debug-Console-${{ needs.semver.outputs.GITVERSION_SEMVER }}-macos-app-arm64 /tmp
 
     - uses: actions/upload-artifact@v4
