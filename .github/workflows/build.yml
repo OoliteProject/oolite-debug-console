@@ -104,10 +104,10 @@ jobs:
          --log-level=WARN `
          --onefile `
          --name OoDebugConsole `
-         --add-binary "OoJSC.ico:." `
-         --add-binary "oojsc.xbm:." `
+         --add-binary "images\OoJSC.ico:." `
+         --add-binary "images\oojsc.xbm:." `
          --noconsole `
-         --icon=OoJSC.ico `
+         --icon=images\OoJSC.ico `
          DebugConsole.py
 
     #      --version-file=OoDebug_version_info.txt `
@@ -147,8 +147,8 @@ jobs:
       run: |
         pyinstaller \
         --onefile \
-        --add-binary "oojsc.xbm:." \
-        --add-binary "OoJSC.ico:." \
+        --add-binary "images/oojsc.xbm:." \
+        --add-binary "images/OoJSC.ico:." \
         DebugConsole.py
 
     - name: create archive

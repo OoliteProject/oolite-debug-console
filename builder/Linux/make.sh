@@ -89,8 +89,8 @@ mkdir -p "$onefilebase" || q "couldn't make directory $onefilebase"
 cd $onefilebase && commonparts && cd - || q "commonparts fail"
 #prep &&
 pyinstaller --name "$basename" --onefile "${relpath}$inscript" \
- --add-binary "${relpath}oojsc.xbm:." --add-binary "${relpath}OoJSC.ico:." \
- --add-binary "${relpath}OoJSC256x256.png:." &&
+ --add-binary "${relpath}/images/oojsc.xbm:." --add-binary "${relpath}/images/OoJSC.ico:." \
+ --add-binary "${relpath}/images/OoJSC256x256.png:." &&
 mv "dist/$basename" "${onefilebase}"/bin &&
 tarname="$tarbase-onefile.tgz"
 tar -C "$builddir/$onefilebase" --numeric-owner --dereference \

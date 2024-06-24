@@ -50,8 +50,8 @@ onefile(){
 step="making executable"
 echo "$step"
 pyinstaller --name "$basename" --onefile "${relpath}$inscript" \
- --add-binary "${relpath}oojsc.xbm:." --add-binary "${relpath}OoJSC.ico:." \
- --add-binary "${relpath}OoJSC256x256.png:." &&
+ --add-binary "${relpath}/images/oojsc.xbm:." --add-binary "${relpath}/images/OoJSC.ico:." \
+ --add-binary "${relpath}/images/OoJSC256x256.png:." &&
 tarname="$tarbase-onefile.tgz"
 tar -C "$builddir/dist" --numeric-owner --dereference \
  -cpzf "$tardir/$tarname" . || q "$failed $step"
