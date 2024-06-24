@@ -91,6 +91,7 @@ jobs:
         pip install -U pyinstaller
         pip install -U click
         pip install -U twisted
+        pip install -U pywin32
 
 #Flibble. Wonder if this is actually used now?        pip install -U pywin32
 
