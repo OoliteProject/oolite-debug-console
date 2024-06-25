@@ -48,7 +48,7 @@ On Mac if not running from source, you'll need to cd into the app bundle to laun
 
 On Windows, to avoid launching a console, standard output and standard error (STDOUT and STDERR) have nowhere to go, and cannot be used. This renders the app unable to send out help or errors until the main log file is open. Using the Windows executable by double-clicking will create a text file in the launching directory for standard input and output. In normal circumstances it should remain empty. If you drop the executable on cmd or powershell and give it an argument (like -h), the output will go into a file in whatever the current working directory is in that console. You can create a shortcut with arguments to change the options shown in the help, and that shortcut can make the current working directory such that the stdio txt file will be created out of harms way.
 
-I would advise you to stay clear of the Aliases menu. All aliases/functions I tried to define there would fire non-stop.
+I would advise you to stay clear of the Aliases menu for the moment, it's under reconstruction.
 
 Hopefully this is nearly feature complete, and should be stable in short order.
 
