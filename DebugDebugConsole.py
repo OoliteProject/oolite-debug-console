@@ -2407,7 +2407,7 @@ class AppWindow(Frame):
 			polled = self.isAliasPolled(alias) and not self.isAliasExec(self.aliasDefns.get(alias, ''))
 			self.pollAliasVar.set(1 if polled else 0)
 			self.aliasesPolled[alias] = polled
-		print("FLIBBLEDEBUG setAliasPoll IS aliasesPolled[alias]=:" + self.aliasesPolled[alias] + " POLLED=", polled)
+		print("FLIBBLEDEBUG setAliasPoll IS aliasesPolled[alias]=:", self.aliasesPolled[alias], " POLLED=", polled)
 		return polled
 
 	aliasUndo = []
@@ -2675,8 +2675,10 @@ class AppWindow(Frame):
 		print("FLiBBLEDEBUG in pollAliases: count=" + str(count) + "")
 		if self.connectedToOolite:
 			if len(self.aliasPollQueue) == 0:	# create new queue
-				self.aliasPollQueue = OrderedDict(sorted([(k,v) for k,v in self.aliasDefns.items() \
-											if k in self.aliasesPolled], key=lambda t: t[0]))
+				self.aliasPollQueue = OrderedDict(sorted([(k,v) \
+						for k,v in self.aliasDefns.items() \
+							if k in self.aliasesPolled and self.aliasesPolled[k]], \
+						key=lambda t: t[0]))
 			print("FLiBBLEDEBUG in pollAliases: aliasPollQueue=" + str(self.aliasPollQueue) )
 			while count > 0 and len(self.aliasPollQueue) > 0:
 				alias, defn = self.aliasPollQueue.popitem(last=False) # False => FIFO
@@ -4137,9 +4139,9 @@ class AppWindow(Frame):
 					self.aliasesPolled[ key ] = self.defaultPolling(value)
 					opt['Aliases'][key] = self.aliasDefns[ key ] = value
 				else:
-					self.aliasesPolled[ key ] = polled.lower() != 'n'
+					self.aliasesPolled[ key ] = False if self.isAliasExec(value) else polled.lower() != 'n'
 					opt['Aliases'][key] = self.aliasDefns[ key ] = aliasDef
-				print("FLIBBLEDEBUG cfg.options polled=" + polled)
+				print("FLIBBLEDEBUG cfg.options self.aliasesPolled=", self.aliasesPolled[ key ])
 			self.loadedConfig = self.copyConfig()	# save copy to detect changes on Save Config Now
 
 		except Exception as exc:
