@@ -23,12 +23,12 @@ Usage: DebugConsole.py [OPTIONS]
 
 Options:
   -v, --version     Show the version and exit.
-  -b, --base TEXT   Base filename for config/log :  Default=OoDebugConsole
+  -b, --base TEXT   Base filename for config/log :  Default=DebugConsole2
                     (filter A-Za-z0-9_-)
   -c, --cpath PATH  Directory for config files. Will be created if missing.
-                    Default=/home/username/.Oolite/DebugConsole2
+                    Default=/home/username/.Oolite/Configs
   -l, --lpath PATH  Directory for log files. Will be created if missing.
-                    Default=/home/username/.Oolite/DebugConsole2
+                    Default=/home/username/.Oolite/Logs
   -x, --cext TEXT   Config file extension. Default=cfg (filter A-Za-z0-9)
   -y, --lext TEXT   Log file extension. Default=log (filter A-Za-z0-9)
   -z, --hext TEXT   History file extension. Default=dat (filter A-Za-z0-9)

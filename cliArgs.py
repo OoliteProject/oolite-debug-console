@@ -22,14 +22,12 @@ from _version import __version__
 
 # set up globals with sane defaults using same names as click
 #Doen't work in 2.7 _HOME=Path.home()
-#Doen't work in 2.7 _DEFPATH = os.path.join(_HOME, '.Oolite', 'DebugConsole2')
 _HOME=os.path.expanduser("~") # Allows for python 2.7
-_DEFPATH = os.path.join(_HOME, '.Oolite', 'DebugConsole2')
 
 g = dict(
-  base = "OoDebugConsole",
-  cpath = _DEFPATH,
-  lpath = _DEFPATH,
+  base = "DebugConsole2",
+  cpath = os.path.join(_HOME, '.Oolite', 'Configs'),
+  lpath = os.path.join(_HOME, '.Oolite', 'Logs'),
   cext = 'cfg',
   hext = 'dat',
   lext = 'log',
