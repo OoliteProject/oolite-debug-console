@@ -1,3 +1,10 @@
+<h1 align="center">Oolite Debug Console 2 (beta)</h1>
+<p align="center" width="100%">
+  <picture>
+    <img src="images/OoJSC256x256.png"</img>
+  </picture>
+</p>
+
 This is a major fluffing of version 2.
 
 This version should work with python 2.7 and >3.6.
