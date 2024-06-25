@@ -2687,6 +2687,11 @@ class AppWindow(Frame):
 			if len(self.aliasPollQueue) == 0:	# create new queue
 				self.aliasPollQueue = OrderedDict(sorted([(k,v) for k,v in self.aliasDefns.items() \
 											if k in self.aliasesPolled], key=lambda t: t[0]))
+				self.aliasPollQueue = OrderedDict(sorted([(k,v) \
+					    for k,v in self.aliasDefns.items() \
+						if k in self.aliasesPolled and self.aliasesPolled[k]], \
+						    key=lambda t: t[0]))
+
 			while count > 0 and len(self.aliasPollQueue) > 0:
 				alias, defn = self.aliasPollQueue.popitem(last=False) # False => FIFO
 				if self.sendAliasRegistration(alias, poll=True):
@@ -4145,8 +4150,9 @@ class AppWindow(Frame):
 					self.aliasesPolled[ key ] = self.defaultPolling(value)
 					opt['Aliases'][key] = self.aliasDefns[ key ] = value
 				else:
-					self.aliasesPolled[ key ] = polled.lower() != 'n'
+					self.aliasesPolled[ key ] = False if self.isAliasExec(value) else polled.lower() != 'n'
 					opt['Aliases'][key] = self.aliasDefns[ key ] = aliasDef
+
 			self.loadedConfig = self.copyConfig()	# save copy to detect changes on Save Config Now
 
 		except Exception as exc:
