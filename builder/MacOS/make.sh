@@ -17,6 +17,7 @@ cd "$basedir" || q "Can't cd to $basedir"
 builddirname=build
 builddir="$basedir/$builddirname" # this can be deleted to retry a build
 basename=OoliteDebugConsole2 # gets used a lot
+appPrettyName="Oolite Debug Console 2.app"
 inscript=DebugConsole.py # the name of the script we'll be 'compiling'
 venv="$builddir/pyinstaller"
 relpath="../../../"
@@ -69,12 +70,13 @@ A tarball is at '$tardir/$tarname'.
 appbundle(){
 step="making appbundle"
 echo "$step"
-pyinstaller --name "$basename" --onefile "${relpath}$inscript" \
+pyinstaller --name "$basename" --onedir "${relpath}$inscript" \
  --windowed --icon "${relpath}/images/OoJSC.icns" || q "failed appbundle"
+mv "$builddir/dist/${basename}.app" "$builddir/dist/${appPrettyName}" &&
 tarname="$tarbase-app.tgz" &&
 tar -C "$builddir/dist" --numeric-owner --dereference \
- -cpzf "$tardir/$tarname" ${basename}.app || q "$failed $step"
-#mv  dist/$basename $basedir &&
+ -cpzf "$tardir/$tarname" "${appPrettyName}" || q "$failed $step"
+mv  dist/"$appPrettyName" $basedir &&
 echo "
 Finished $step.
 

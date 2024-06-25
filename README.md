@@ -38,13 +38,11 @@ Options:
 
 The paths will differ on other platforms. The defaults will settle in the next update.
 
-App now has an icon in task switcher if running from source when the working directory is 'other' than source code dir.
-
-Running via python from another working directory it now finds it's icons. This allows for running visually normally via a symlink in the PATH on systems that allow it.
-
 On Linux 'installable' builder, the wrapper script and ENV var are gone. The builder make script in the source can simply spit out a desktop file if you want to run directy from source and have a pretty icon in your application menus. If enough people ask, I'll give clearer instructions for that, or maybe even write a very simple installer to put a copy of the source in ~/.local/lib, symlink the main python script into ~/.local/bin, the desktop file in ~/.local/share/applications, and the icon place in... oh you can guess that! /usr/local will work too of course.
 
 On Mac if not running from source, you'll need to cd into the app bundle to launch from a terminal with --help. Whether Mac Oolite can talk to it 'out of the box' is yet to be ascertined, but is should function as a remote debugger. ( I've tested it using ssh to forward from a Linux running Oolite by adding -L127.0.0.1:8563:127.0.0.1:8563 into the ssh args from the Linux to the Mac.(Flibble))
+Assuming you've installed to /Applications, you can execute from a terminal, in this example invoking the help, with:
+'''/Applications/Oolite\ Debug\ Console\ 2.app/Contents/MacOS/OoliteDebugConsole2 -h'''
 
 On Windows, to avoid launching a console, standard output and standard error (STDOUT and STDERR) have nowhere to go, and cannot be used. This renders the app unable to send out help or errors until the main log file is open. Using the Windows executable by double-clicking will create a text file in the launching directory for standard input and output. In normal circumstances it should remain empty. If you drop the executable on cmd or powershell and give it an argument (like -h), the output will go into a file in whatever the current working directory is in that console. You can create a shortcut with arguments to change the options shown in the help, and that shortcut can make the current working directory such that the stdio txt file will be created out of harms way.
 
