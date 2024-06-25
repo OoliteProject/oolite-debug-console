@@ -74,7 +74,7 @@ pyinstaller --name "$basename" --onedir "${relpath}$inscript" \
  --windowed --icon "${relpath}/images/OoJSC.icns" || q "failed appbundle"
 mv "$builddir/dist/${basename}.app" "$builddir/dist/${appPrettyName}" &&
 tarname="$tarbase-app.tgz" &&
-tar -C "$builddir/dist" --numeric-owner --dereference \
+tar -C "$builddir/dist" --numeric-owner \
  -cpzf "$tardir/$tarname" "${appPrettyName}" || q "$failed $step"
 mv  dist/"$appPrettyName" $basedir &&
 echo "
