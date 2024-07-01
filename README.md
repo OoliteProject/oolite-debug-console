@@ -41,8 +41,9 @@ The paths will differ on other platforms. The defaults will settle in the next u
 On Linux:
 
 To run from source (best/fastest), if on Ubuntu bassed systems:
-```apt install python3-tk python3-click python3-twisted
-python3 OoDC.py #append -h to see the list of arguments.
+```
+apt install python3-tk python3-click python3-twisted
+python3 OoDC.py # Optionally append -h to see the list of arguments.
 ```
 In the 'installable' builder, the wrapper script and ENV var are gone. The builder make script in the source can simply spit out a desktop file if you want to run directy from source and have a pretty icon in your application menus. If enough people ask, I'll give clearer instructions for that, or maybe even write a very simple installer to put a copy of the source in ~/.local/lib, symlink the main python script into ~/.local/bin, the desktop file in ~/.local/share/applications, and the icon place in... oh you can guess that! /usr/local will work too of course.
 
