@@ -6,7 +6,7 @@ Default file save locations are preset within $HOME/.Oolite on all platforms. Th
 
 CLI args have been added to allow file locations/debug etc. to be changed. This should work in icons/launchers as well as on the command line.
 
-The CLI output is not directly visible on the Windows executable version, since that has no console. For now, all output that 'would' go to STDOUT and STDERR goes into a text file in the working directory.
+The CLI output is not directly visible on the Windows executable version, since that has no console. For now, all output that 'would' go to STDOUT and STDERR goes into a text file in the working directory. Further explained below.
 
 To run from source, the rquirements are click and twisted (apt install python3-click python3-twisted, or python3 -m pip install click twisted). On Debian/Ubuntu systems, assuming python3 is installed, you may need to apt install python3-tk
 
@@ -49,7 +49,7 @@ In the 'installable' builder, the wrapper script and ENV var are gone. The build
 
 On MacOS:
 
-If not running from source, you'll need to cd into the app bundle to launch from a terminal with --help. Whether Mac Oolite can talk to it 'out of the box' is yet to be ascertined, but is should function as a remote debugger. ( I've tested it using ssh to forward from a Linux running Oolite by adding -L127.0.0.1:8563:127.0.0.1:8563 into the ssh args from the Linux to the Mac.(Flibble))
+If not running from source, you'll need to cd into the app bundle to launch from a terminal with --help. Current Mac Oolite versions cannot talk to an external debugger, but this should function as a remote debugger. ( I've tested it using ssh to forward from a Linux running Oolite by adding -L127.0.0.1:8563:127.0.0.1:8563 into the ssh args from the Linux to the Mac.(Flibble))
 
 Assuming you've installed to /Applications, you can execute from a terminal, in this example invoking the help, with:
 
@@ -57,11 +57,10 @@ Assuming you've installed to /Applications, you can execute from a terminal, in 
 
 On Windows:
 
-To avoid launching a console, standard output and standard error (STDOUT and STDERR) have nowhere to go, and cannot be used. This renders the app unable to send out help or errors until the main log file is open. Using the Windows executable by double-clicking will create a text file in the launching directory for standard input and output. In normal circumstances it should remain empty. If you drop the executable on cmd or powershell and give it an argument (like -h), the output will go into a file in whatever the current working directory is in that console. You can create a shortcut with arguments to change the options shown in the help, and that shortcut can make the current working directory such that the stdio txt file will be created out of harms way.
+To avoid launching a console, standard output and standard error have nowhere to go. This renders the app unable to issue help or errors until the main log file is open. Using the Windows executable by double-clicking will create a text file in the current working directory for standard input and output. In normal circumstances that file will remain empty. If you drop the executable on cmd or powershell and give it an argument (like -h), the output will go into the aforementioned file in whatever the current working directory is in that console. You can create a shortcut with arguments to change the options shown in the help, and that shortcut can make the current working directory such that the stdio txt file will be created out of harms way.
 
 All:
 
 Aliases will fire when clicked. Suggest you edit them while not in play.
 
 That about wraps it up for version 2.
-
