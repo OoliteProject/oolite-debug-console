@@ -1,3 +1,4 @@
+#!/bin/env -S python3 -B
 # -*- coding: utf-8 -*-
 #
 #  DebugConsole.py
@@ -10,7 +11,7 @@
 #
 #  GUI stuff (c) 2019 cag CC-by-NC-SA 4
 #
-#  Trivial fixes (c) 2024 MrFlibble CC-by-NC-SA 4
+#  CLI arg and several other fixes (c) 2024 MrFlibble CC-by-NC-SA 4
 #
 
 """
@@ -18,18 +19,28 @@ A gui implementation of the Oolite JavaScript debug console interface.
 """
 
 __author__	= "Jens Ayton <jens@ayton.se>, Kaks, cag"
-__version__	= "2.03"
 
-import os, sys
-if sys.platform == 'win32' and sys.executable.endswith("pythonw.exe"):
-	sys.stdout = open(os.devnull, "w");
-	sys.stderr = open(os.path.join(os.getcwd(), "stderr-"+os.path.basename(sys.argv[0])), "w")		
-	
-try:
-	from sys import frozen
-	FROZEN = True
-except:
-	FROZEN = False
+#__version__	= "2.08" #From this version on, will be pulling version from _version file.
+
+from _version import __version__
+
+import os, sys #Flibble moved this up near the top in case debug on windows without con.
+FROZEN=hasattr(sys, 'frozen')
+if sys.platform == 'win32' and FROZEN:
+	#This is the only "dump it where we are" Flibble investigates: Just keep the exe in a dir :-|
+	sys.stderr = open(os.path.join(os.getcwd(), os.path.basename(sys.argv[0]))+"-stderr.txt", "w")
+	# Send all stdout to stderr needs stderr to exist first.
+	# When frozen with noconsole on 'doze, there's no stdout to begin with!
+	sys.stdout = sys.stderr
+
+import cliArgs as dca #Flibble
+
+##################################### 
+if dca.g['debug']:
+	import pdb
+	from traceback import print_exc
+#####################################
+
 
 try:
 	from sys import _MEIPASS
@@ -49,10 +60,17 @@ from re import compile
 from logging import StreamHandler, basicConfig, Formatter, getLogger, shutdown, DEBUG, WARNING
 from traceback import format_tb
 from errno import ENOENT, ENOSPC
-	
+
 from platform import system as platform_system
 platformIsLinux = platform_system() == 'Linux'
 platformIsWindows = platform_system() == 'Windows'
+
+#As we have parsed the command line, and dragged in constants, we know the OS
+# and if not frozen, knowing the path will allow us to find our icons.
+if not FROZEN:
+	#Get script path (dereferenced in case symlink).
+	SCRIPTPATH = os.path.dirname(os.path.realpath(__file__))
+
 
 Python2 = sys.version_info[0] == 2
 if Python2:
@@ -69,18 +87,6 @@ else:
 	import tkinter.colorchooser as tkColor
 	from time import perf_counter, asctime
 
-##################################### 
-## toggle all before mk
-
-CAGSPC = False
-
-# CAGSPC = os.path.exists(r'C:\Users\cag')
-
-# if CAGSPC:
-	# import pdb
-	# from traceback import print_exc
-	
-#####################################
 
 # constants
 MINIMUM_WIDTH = 600
@@ -93,24 +99,30 @@ GEOMETRY_RE = compile(r'(\d+)x(\d+)\+(\d+)\+(\d+)')
 TRIMSECT_RE = compile(r"\[ *(?P<header>[^]]+?) *\]") # trim section names
 CONNECTMSG = "Please (re)start Oolite in order to connect."
 
-BASE_FNAME = 'DebugConsole'
-CFG_EXT = '.cfg'
-HIST_EXT = '.dat'
-LOG_EXT = '.log'
+#Flibble : Adding cli args stuff with sane default paths.
+BASE_FNAME = dca.g['base']
+CFG_EXT = '.' + dca.g['cext']
+HIST_EXT = '.' + dca.g['hext']
+LOG_EXT = '.' + dca.g['lext']
+LOG_PATH = dca.g['lpath']
+CFG_PATH = dca.g['cpath']
 
-# if we're using the compiled version, it's OoDebugConsole.cfg rather than DebugConsole.cfg
-if FROZEN: BASE_FNAME = 'Oo' + BASE_FNAME
-CFGFILE = BASE_FNAME + CFG_EXT
-# use a corresponding cmdLine history file.
-HISTFILE = BASE_FNAME + HIST_EXT
-LOGFILE = BASE_FNAME + LOG_EXT
+CFG_BASE = os.path.join ( CFG_PATH, BASE_FNAME )
+HIST_BASE = os.path.join ( LOG_PATH, BASE_FNAME )
+LOG_BASE = os.path.join ( LOG_PATH, BASE_FNAME )
+
+CFGFILE = CFG_BASE + CFG_EXT
+HISTFILE = HIST_BASE + HIST_EXT
+LOGFILE = LOG_BASE + LOG_EXT
+
+
 MAX_HIST_CMDS = 200
 MAX_HIST_SIZE = MAX_HIST_CMDS * 1000
-		
+
 MAX_HIST_VERSION = 3
 MAX_CFG_VERSION = 3
 MAX_LOG_VERSION = 5
- 
+
 # in seconds
 CMD_TIMEOUT = 2			# elapsed time before sending next in queue (current goes in timedOutCmds)
 CMD_TIMEOUT_LONG = 4	#    "  except for a couple long running cmds
@@ -213,6 +225,7 @@ defaultConfig = OrderedDict((
 				('_PlistOverrides_', 	'if Yes, colors and fonts are replaced with those received from Oolite'),
 				('PlistOverrides', 		'No'),
 				('MaxBufferSize', 		'200000'),
+				('DebugToggle', 		'No'),
 		   ))
 		  ),
 		  ('Font', OrderedDict((
@@ -376,7 +389,7 @@ class TopWindow(Toplevel):
 		if hasattr(self, 'mouseXY'):
 			self.geometry('+{}+{}'.format(*self.mouseXY))
 		self.deiconify()
-		self.lift()						# required in pyinstaller version else fontSelectTop won't show (anywhere!)
+		self.lift()			# required in pyinstaller version else fontSelectTop won't show (anywhere!)
 		self.focus_set()
 
 	def closeTop(self, event=None):
@@ -527,7 +540,7 @@ class OoBarMenu(Menu):					# for menubar pulldown menus that support fonts!
 			self.entryconfigure(self.menuItems[label], **kwargs)
 		else:
 			errmsg = 'Error: label "{}" not in menuItems'.format(label)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -951,7 +964,7 @@ class TextPopup(Menu):
 				debugLogger.error(errmsg)
 			except Exception as exc:
 				errmsg = 'Exception: {}'.format(exc)
-				if CAGSPC:
+				if dca.g['debug']:
 					print(errmsg)
 					print_exc()
 					pdb.set_trace()
@@ -1360,7 +1373,7 @@ class AppWindow(Frame):
 		self.top.bind_all('<<closeAnyOpenFrames>>', self.closeAnyOpenFrames)
 
 	def init_toplevel(self):
-		top = self.top = Tk()
+		top = self.top = Tk(className='OoDebug2')
 		top.minsize(MINIMUM_WIDTH, MINIMUM_HEIGHT)
 		top.resizable(width=True, height=True)
 		top.title(DEBUGGER_TITLE)
@@ -1371,12 +1384,11 @@ class AppWindow(Frame):
 		# NB: menubar must precede .geometry call, else app shrinks by height of menubar (20) on each invocation
 		#     - no longer relevant as not using toplevel menu, good to remember
 
-		try:							# if geometry are not valid, revert to default
+		try:					# if geometry are not valid, revert to default
 			top.geometry(self.localOptions['Geometry'])
 		except:
 			top.geometry(DEFAULT_GEOMETRY)# "500x380"
-		iconFile = 'OoJSC48x48.png' if platformIsLinux else 'OoJSC.ico'
-		iconPath = os.path.join(os.getcwd(), iconFile)
+		iconFile = 'OoJSC256x256.png' if platformIsLinux else 'OoJSC.ico'
 
 		if FROZEN:
 			meipass = None
@@ -1386,7 +1398,9 @@ class AppWindow(Frame):
 				meipass = os.environ['_MEIPASS2']
 			if meipass:
 				iconPath = os.path.join(meipass, iconFile)
-				
+		else:
+			iconPath = os.path.join(SCRIPTPATH, "images", iconFile)
+
 		# Under Windows, the DEFAULT parameter can be used to set the icon
 		# for the widget and any descendents that don't have an icon set
 		# explicitly.  DEFAULT can be the relative path to a .ico file
@@ -1396,7 +1410,7 @@ class AppWindow(Frame):
 				top.iconbitmap(default=iconPath)
 			except:
 				try:
-					top.iconbitmap(default=os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+					top.iconbitmap(default=os.path.join(os.path.dirname(sys.argv[0]), "images", iconFile))
 				except:
 					try:
 						top.iconbitmap(default='@oojsc.xbm')
@@ -1404,15 +1418,19 @@ class AppWindow(Frame):
 						pass
 		else:
 			try:
-				top.iconbitmap(iconPath)
+				tempicon = PhotoImage(file = iconPath)
+				top.iconphoto(False, tempicon)
 			except:
 				try:
-					top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), iconFile))
+					top.iconbitmap(iconPath)
 				except:
 					try:
-						top.iconbitmap('@oojsc.xbm')
+						top.iconbitmap(os.path.join(os.path.dirname(sys.argv[0]), "images", iconFile))
 					except:
-						pass
+						try:
+							top.iconbitmap('@oojsc.xbm')
+						except:
+							pass
 
 ## app window and widgets ##################################################
 
@@ -1533,28 +1551,28 @@ class AppWindow(Frame):
 		'timeAccelerationFast': None, 	# IntVar for fast menu
 	}
 	
-	consoleOptions = OrderedDict((					
+	consoleOptions = OrderedDict((
 		# properties queryable from cmdLine but added for convenience
-		('Detail level', detailLevels),				
-		('Max. detail level', 'maximumDetailLevel'),		 		
+		('Detail level', detailLevels),
+		('Max. detail level', 'maximumDetailLevel'),
 		# ('FPS display', ['status', 'toggle']),	# already in debugOptions
-		('pedanticMode', ['status', 'toggle']),			
-		('ignoreDroppedPackets', ['status', 'toggle']),		
+		('pedanticMode', ['status', 'toggle']),
+		('ignoreDroppedPackets', ['status', 'toggle']),
 		('Platform details', ['platformDescription', 'glVendorString', 'glRendererString', 
-							  'glFixedFunctionTextureUnitCount', 'glFragmentShaderTextureUnitCount',])				
+							  'glFixedFunctionTextureUnitCount', 'glFragmentShaderTextureUnitCount',])
 	))
 	
-	consoleFunctions = OrderedDict((	
+	consoleFunctions = OrderedDict((
 		# 0-arg functions available from cmdLine but added for convenience
-		('clear console', 'console.clearConsole()'),		 		
-		('script stack', 'log(console.scriptStack())'),		 		
-		('write JS memory stats', 'console.writeJSMemoryStats()'),		 		
-		('garbage collect', 'log("collecting garbage: " + console.garbageCollect())'),		 		
-		('', ''),		 		
-		# ('use at your own risk!', ''),		 		
+		('clear console', 'console.clearConsole()'),
+		('script stack', 'log(console.scriptStack())'),
+		('write JS memory stats', 'console.writeJSMemoryStats()'),
+		('garbage collect', 'log("collecting garbage: " + console.garbageCollect())'),
+		('', ''),
+		# ('use at your own risk!', ''),
 		('write memory stats!', 'console.writeMemoryStats()'),
 	))
-### add 2nd version 'dump memory stats'	that's log file only	
+### add 2nd version 'dump memory stats'	that's log file only
 	TRANS_CHARS = ' .,!'	# char to be removed from key when assigning label
 		
 	def createDebugMenus(self):			# create an Debug pulldown menu
@@ -1809,7 +1827,7 @@ class AppWindow(Frame):
 			self.queueSilentCmd(cmd, 'showFPS', self.debugOptions['showFPS'])
 		else:
 			errmsg = 'Unsupported button "{}", value = {}'.format(varName, value)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace(errmsg)
@@ -1820,7 +1838,7 @@ class AppWindow(Frame):
 		if label not in ['gameStarted', 'pollDebugFlags', 'pollStarSystem']:
 			errmsg = 'Label: {}, value: {}, tkVar: {} = "{}"'.format(label, value, tkVar, tkVar.get())
 			debugLogger.debug(errmsg)
-			
+
 		isStr = isinstance(value, str)
 		isInt = isinstance(value, int)
 		# if isInt or (isStr and value.isdigit()):
@@ -1836,11 +1854,11 @@ class AppWindow(Frame):
 				self.debugOptions['timeAcceleration'].set(value)
 			else: 		
 				errmsg = 'Unsupported label: {}, value: {}, type: {}'.format(label, value, type(value))
-				if CAGSPC:
+				if dca.g['debug']:
 					print(errmsg)
 					print_exc()
 					pdb.set_trace()
-				else: 		
+				else:
 					debugLogger.warning(errmsg)
 		elif isStr and label == 'pollStarSystem':
 			system = value.strip('[]')	# eg System 0:240 "Raleen"
@@ -1854,14 +1872,14 @@ class AppWindow(Frame):
 			# tkVar.set(float(value))
 		else:
 			errmsg = 'Wrong type for label: {}, value: {}, type: {}'.format(label, value, type(value))
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
 			else: 		
 				debugLogger.warning(errmsg)
 
-## startup step 1				
+## startup step 1
 	def initDebugMenu(self):	# also called by restoreMsgTraffic
 		self.debugMenu.changeAllStates(NORMAL)
 		debug = self.debugOptions
@@ -1892,6 +1910,7 @@ class AppWindow(Frame):
 		'ResetCmdSizeOnRun': True,		# reset cmdLine's size after cmd is run
 		'MsWheelHistory': False,		# allow mouse wheel to scroll through cmd history
 		'PlistOverrides': True,
+		'DebugToggle': False,
 		'Aliases': {},
 	}
 	localOptnText = OrderedDict((
@@ -1906,7 +1925,7 @@ class AppWindow(Frame):
 		('PlistOverrides', 		'Use Oolite plist for local font/colors'),
 	))
 	localOptnVars = {}					# dict of tkinter vars for menus
-	
+
 	def createOptionsMenus(self): 		# create an Options pulldown menu
 		self.optionsMenu = OoBarMenu(self.menubar, label='Options', 
 										font=self.defaultFont, 
@@ -1936,15 +1955,28 @@ class AppWindow(Frame):
 		# list of console.script's properties, to prevent collisions w/ aliases
 		self.scriptPropsStr = StringVar(value='never set', name='scriptPropsStr')	
 		self.addTraceTkVar(self.scriptPropsStr, self.loadScriptProps)
-			
+
 		menu.add_separator()
-		self.logDebugMsgs = IntVar(name='logDebugMsgs', value=(1 if debugLogger.getEffectiveLevel() == DEBUG else 0))
-		menu.add_checkbutton(label='toggle debug messsages', variable=self.logDebugMsgs, command=toggleDebugMsgs)
-		
+		areDebugging = opt['DebugToggle']
+		# synchronize menu value w/ cli arg; --debug will not lead to config file
+		# value changing (that would require user action of double toggling menu)
+		loggerLevel = debugLogger.getEffectiveLevel()
+		if areDebugging and loggerLevel != DEBUG:
+			toggleDebugMsgs()
+		elif not areDebugging and loggerLevel == DEBUG:
+			areDebugging = True
+		self.logDebugMsgs = IntVar(name='logDebugMsgs', value=(1 if areDebugging else 0))
+		menu.add_checkbutton(label='toggle debug messsages', variable=self.logDebugMsgs, 
+					   		 command=self.reverseDebugState)
+
 		## rest is debugging, to be deleted
-		if CAGSPC:
+		if dca.g['debug']:
 			menu.add_command(label='open debugger', command=setTrace)
-			
+
+	def reverseDebugState(self, *args):
+		self.localOptions['DebugToggle'] = self.logDebugMsgs.get()
+		toggleDebugMsgs()
+
 	def setOptionFromCheckButton(self, varName, tkVar):
 		value = tkVar.get()
 		opt = self.localOptions
@@ -1981,7 +2013,7 @@ class AppWindow(Frame):
 			opt[varName] = False
 			self.localOptnVars[varName].set(0)
 			if written:
-				dest = os.path.join(os.getcwd(), CFGFILE).replace(os.sep, '/')
+				dest = os.path.join(CFGFILE).replace(os.sep, '/')
 				msg = 'configuration settings saved to   {}'.format(dest)
 			else:
 				msg = 'configuration not written as nothing has been changed'
@@ -1991,7 +2023,7 @@ class AppWindow(Frame):
 			else:
 				self.colorPrint('')
 				self.colorPrint(msg)
-		
+
 	def mouseWheelEvent(self, event):
 		if platformIsLinux:
 			if event.num == 4: 			# scroll fwd
@@ -2090,6 +2122,7 @@ class AppWindow(Frame):
 		self.aliasDefineEntryUndo.grid(		row=4,	column=2, 	sticky=SE, 	padx=2)
 		self.aliasDefineEntryAdd.grid(		row=4,	column=3, 	sticky=SE, 	padx=2)
 
+		self.aliasWindow.bind('<Configure>', lambda event: self.saveAliasPosn(event))
 		aliasList.bind('<Return>', self.selectAlias)
 		aliasList.bind('<Double-ButtonRelease-1>', self.selectAlias)
 		aliasList.bind('<<ListboxSelect>>', self.lookupAlias)
@@ -2102,13 +2135,28 @@ class AppWindow(Frame):
 			mouseXY = self.loadedConfig['AliasWindow'].strip('[]')
 			self.aliasWindow.mouseXY = list(map(int, mouseXY.split(',')))
 
+	saveAPafterID = None
+	def saveAliasPosn(self, event=None):
+		# this check can go first as there is no other <Configure> binding
+		if self.saveAPafterID is not None:		return
+		if not hasattr(event, 'widget'):		return
+		if event.widget != self.aliasWindow:	return 
+		# <Configure> events fire quite rapidly while window is in motion
+		# we wait for half a second
+		self.saveAPafterID = self.top.after(500, self.doSaveAPposn)
+	
+	def doSaveAPposn(self, event=None):
+		self.saveAPafterID = None
+		self.aliasWindow.savePosition()
+		self.localOptions['AliasWindow'] = self.aliasWindow.mouseXY
+	
 	def resetAliasEntry(self, focus=True):# handler for 'Clear' button
 		self.aliasDefinition.set('')
 		self.aliasValue.set('')
 		self.pollAliasVar.set(1)
 		if focus:
 			self.aliasDefineEntry.focus_set()
-		
+
 	aliasSelected = None				# index of alias selected
 	def showAliasWindow(self):			# called from Options menu 
 		aliases = [k for k in self.aliasDefns.keys()]
@@ -2193,7 +2241,7 @@ class AppWindow(Frame):
 				aliasDef = self.aliasDefns[alias]
 				self.aliasDefinition.set(aliasDef)
 				self.setAliasPoll(alias)
-	
+
 	def doAliasAction(self, act): 		# handlers for buttons
 		self.aliasMsgStr.set('')
 		self.aliasRegStr.set('')
@@ -2230,7 +2278,7 @@ class AppWindow(Frame):
 				self.aliasMsgStr.set('alias not defined')
 			self.updateAliasButtons()
 		return 'break'
-				
+
 	def verifyAlias(self, alias):		# used by lookupAlias() (when <<ListboxSelect>> fires)
 		self.aliasRegStr.set('')
 		if self.connectedToOolite:
@@ -2305,9 +2353,9 @@ class AppWindow(Frame):
 			return False
 		defn = defn.replace('"', "\'")	# need double quotes to submit alias (else syntax error)
 		defn = defn.replace("'", "\'")
-		defn = defn.replace("`", "\`")
+		defn = defn.replace("`", r"\`")
 		return defn
-			
+
 	def aliasEntryAdd(self): 			# 'Add' button or <Return> in aliasDefineEntry
 		self.aliasMsgStr.set('')
 		self.aliasRegStr.set('')
@@ -2328,7 +2376,7 @@ class AppWindow(Frame):
 				msg = "{} '{}'".format('use Delete to remove' if alias in self.aliasDefns else 'define alias', alias)
 				self.aliasMsgStr.set(msg)
 		self.updateAliasButtons()
-		
+
 	def addAlias(self, alias, value, addUndo=True):
 		if self.aliasDefns.get(alias) != value:
 			exists = alias in self.aliasDefns and len(self.aliasDefns[alias]) > 0 # set to '' on creation
@@ -2349,30 +2397,41 @@ class AppWindow(Frame):
 			self.aliasDefinition.set(self.aliasDefns[alias])
 			self.aliasMsgStr.set("'{}' unchanged".format(alias))
 
-	def defaultPolling(self, aliasDef):
-		if len(aliasDef) == 0:
-			return True
-		return not aliasDef.startswith('system.') and not aliasDef.startswith('worldScripts.')
+	NO_ALIAS_FN_POLLING = compile(r'(?xs) [^f]* function | [^(]*[(]\s*function')
+	def isAliasExec(self, defn):
+		return self.NO_ALIAS_FN_POLLING.search(defn) is not None
+
+	def defaultPolling(self, defn):
+		# set default based on: system... is dynamic
+		#   worldScript... is usually static w/ one '.', unknowable otherwise
+		#   never poll executables!
+		if len(defn) == 0 or \
+			(defn.startswith('worldScripts.') and defn.count('.') == 1 ) or \
+				self.isAliasExec(defn):
+			return False
+		return defn.startswith('system.')
 
 	def isAliasPolled(self, alias):
 		return self.aliasesPolled[alias] if alias in self.aliasesPolled else self.defaultPolling(self.aliasDefns.get(alias, ''))
-		
+
 	def toggleAliasPoll(self):				# handler for 'polled' Checkbutton
 		alias = self.newAliasName.get().strip()
-		if len(alias):
+		if len(alias) and not self.isAliasExec(self.aliasDefns.get(alias, '')):
 			polled = self.isAliasPolled(alias)
 			self.pollAliasVar.set(1 if not polled else 0)
 			self.aliasesPolled[alias] = not polled
-	
+		else:
+			self.pollAliasVar.set(0)
+
 	def setAliasPoll(self, alias=None):
 		alias = alias or self.newAliasName.get().strip()
-		polled = True
+		polled = False
 		if len(alias):
-			polled = self.isAliasPolled(alias)
+			polled = self.isAliasPolled(alias) and not self.isAliasExec(self.aliasDefns.get(alias, ''))
 			self.pollAliasVar.set(1 if polled else 0)
 			self.aliasesPolled[alias] = polled
 		return polled
-			
+
 	aliasUndo = []
 	def aliasEntryUndo(self): 			# 'Undo' button
 		# print('aliasEntryUndo, undos: {}'.format('nil' if len(self.aliasUndo) == 0 else '\n\t{}'.format(
@@ -2401,7 +2460,7 @@ class AppWindow(Frame):
 			self.aliasMsgStr.set('')
 		self.updateAliasButtons()
 		return 'break' # so default event handlers don't fire
-	
+
 	ellipsisLen = None
 	def showAliasValue(self, alias):
 		font = self.defaultFont
@@ -2458,7 +2517,7 @@ class AppWindow(Frame):
 				else:
 					# tkVar.set(tkVar.get())				# trigger variable trace
 					errmsg = 'setAliasRegistry, invalid value "{}" for alias "{}"'.format(value, alias)
-					if CAGSPC:
+					if dca.g['debug']:
 						print(errmsg)
 						print_exc()
 						pdb.set_trace()
@@ -2469,7 +2528,7 @@ class AppWindow(Frame):
 			self.reportOnDeletion(alias)
 		else:
 			errmsg = 'setAliasRegistry, invalid label "{}"'.format(label)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -2489,7 +2548,11 @@ class AppWindow(Frame):
 				self.queueSilentCmd(cmd, 'alias-{}-{}'.format(alias, 'poll' if poll else 'send'))
 				if followUp and not poll:
 					self.sendRegistryCheck(alias)
-				return True
+				#FLIBBLEDEBUG return True This if was inserted by Flibble. It should not be needed.
+				if self.isAliasPolled(alias):
+					return True
+				return False
+				#END FLIBBLEDEBUG
 		elif not poll:
 			self.aliasRegStr.set('not connected')
 		return False
@@ -2504,7 +2567,7 @@ class AppWindow(Frame):
 				self.aliasRegStr.set('Did not register')
 		else:
 			errmsg = 'reportRegistration, alias is {}'.format('None' if alias is None else '"{}" is missing from aliasRegistry'.format(alias))
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -2526,7 +2589,7 @@ class AppWindow(Frame):
 				self.reportRegistration(alias)
 		else:
 			errmsg = 'checkRegistration, alias is {}'.format('None' if alias is None else '"{}" is missing from aliasRegistry'.format(alias))
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -2611,7 +2674,7 @@ class AppWindow(Frame):
 				self.aliasRegStr.set('Not un-registered')
 			else:
 				errmsg = 'reportOnDeletion, unsupported value for registered: {}'.format(registered)
-				if CAGSPC:
+				if dca.g['debug']:
 					print(errmsg)
 					print_exc()
 					pdb.set_trace()
@@ -2624,6 +2687,11 @@ class AppWindow(Frame):
 			if len(self.aliasPollQueue) == 0:	# create new queue
 				self.aliasPollQueue = OrderedDict(sorted([(k,v) for k,v in self.aliasDefns.items() \
 											if k in self.aliasesPolled], key=lambda t: t[0]))
+				self.aliasPollQueue = OrderedDict(sorted([(k,v) \
+					    for k,v in self.aliasDefns.items() \
+						if k in self.aliasesPolled and self.aliasesPolled[k]], \
+						    key=lambda t: t[0]))
+
 			while count > 0 and len(self.aliasPollQueue) > 0:
 				alias, defn = self.aliasPollQueue.popitem(last=False) # False => FIFO
 				if self.sendAliasRegistration(alias, poll=True):
@@ -2711,7 +2779,7 @@ class AppWindow(Frame):
 				self.fontSelSelected = 0
 		except Exception as exc: ########
 			errmsg = 'Exception: {}'.format(exc)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				pdb.set_trace() ########
 				print_exc()
@@ -2880,7 +2948,7 @@ class AppWindow(Frame):
 					self.settings[ key ] = bool(tkValue)
 				else:
 					errmsg = 'Unsupported var {}: {}, type: {}'.format(key, value, valueType)
-					if CAGSPC:
+					if dca.g['debug']:
 						print(errmsg)
 						print_exc()
 						pdb.set_trace()
@@ -2962,7 +3030,7 @@ class AppWindow(Frame):
 	def sessionStarted(self, *args):
 		if self.initStartTime:
 			msg = 'initialization took {}'.format((clock() if Python2 else perf_counter()) - self.initStartTime)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(msg)
 			else:
 				debugLogger.debug(msg)
@@ -3039,7 +3107,7 @@ class AppWindow(Frame):
 		try:
 			info = tkVar.trace_vinfo() if Python2 else tkVar.trace_info()
 			traces = len(info)
-			if CAGSPC and traces > 1:
+			if dca.g['debug'] and traces > 1:
 				raise ValueError('delTraceTkVar, unexpected trace info: {}'.format(info))
 			for idx, traceInfo in enumerate(info):
 				if traces > 1 and idx == 0: continue;
@@ -3051,7 +3119,7 @@ class AppWindow(Frame):
 		except TclError as exc:
 			errmsg = 'Exception {}: tkVar = {}, traceID = {}, trace_info = {}'.format(
 							exc, tkVar, traceID, tkVar.trace_vinfo() if Python2 else tkVar.trace_info())
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 			else:
@@ -3059,7 +3127,7 @@ class AppWindow(Frame):
 		except Exception as exc:
 			errmsg = 'Exception {}: tkVar = {}, traceID = {}, trace_info = {}'.format(
 							exc, tkVar, traceID, tkVar.trace_vinfo() if Python2 else tkVar.trace_info())
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -3109,7 +3177,7 @@ class AppWindow(Frame):
 		except Exception as exc:
 			errmsg = 'Exception {}: key = {}, value = {}, hasattr(self, "settings") = {}'.format(
 										exc, key, value, hasattr(self, "settings"))
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -3340,7 +3408,7 @@ class AppWindow(Frame):
 									'setDetailLevel', 'writeMemoryStats']: 				# and these can easily timeout
 				self.submitRequest(msg)	# resubmit msg
 		
-			if CAGSPC:						 ###cag
+			if dca.g['debug']:						 ###cag
 				debugLogger.debug('resetting replyPending, msg.label = {}, # timedOut = {}: {}'.format(
 					msg.label if msg else None,
 					len(self.timedOutCmds), ', '.join(c for c in self.timedOutCmds.keys()) if len(self.timedOutCmds) else ''))
@@ -3370,7 +3438,7 @@ class AppWindow(Frame):
 					silentCmd = msg.cmd if msg.cmd.startswith('(function()') else self.mkCmdIIFE(msg)
 					cmdLineHandler.inputReceiver.receiveUserInput(silentCmd)
 					
-					# if CAGSPC:						 ###cag
+					# if dca.g['debug']:						 ###cag
 						# numRequests, numTimedOut = len(self.requests), len(self.timedOutCmds)
 						# if numRequests == 0 and numTimedOut == 0:
 							# debugLogger.debug('w/ no requests and no timedOutCmds')
@@ -3399,7 +3467,7 @@ class AppWindow(Frame):
 		if length > 3 * self.messageBatchSize:
 			self.messageBatchSize += self.messageBatchSize // 2
 			status = 'handleMessage, buffer has {} messages, => larger messageBatchSize {}'.format(length, self.messageBatchSize)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(status)
 			else:
 				debugLogger.debug(status)
@@ -3447,7 +3515,7 @@ class AppWindow(Frame):
 					continue
 				# internal cmds always get a reply, though it may be 'no result' (done for firm control of traffic)
 				if not self.replyPending or self.replyPending.label != msgLabel:	# unexpected reply
-					# if CAGSPC:					###cag
+					# if dca.g['debug']:					###cag
 						# debugLogger.debug('not expecting msgLabel = {}, replyPending = {}'.format(
 									# msgLabel, self.replyPending.label if self.replyPending else None))
 						# debugLogger.debug('# requests = {}: {}'.format(
@@ -3459,7 +3527,7 @@ class AppWindow(Frame):
 						debugStatus = 'printed'
 						msg = 'no reply expected for message, replyPending: {}'.format(self.replyPending)
 						msg += '\n    colorKey {}, message: {}'.format(colorKey, message[:80] + (' ...' if len(message) > 80 else ''))
-						if CAGSPC:
+						if dca.g['debug']:
 							print(msg)
 							pdb.set_trace()
 						else:
@@ -3468,7 +3536,7 @@ class AppWindow(Frame):
 						self.reSubmitPending()
 						continue
 				
-				# if CAGSPC:
+				# if dca.g['debug']:
 					# debugLogger.debug('processing {}\n'.format(message)) 
 
 				debugStatus = self.processSilentCmd(msgLabel, message, colorKey, emphasisRanges, lastInBatch= (numMsgs == 0) )
@@ -3483,12 +3551,12 @@ class AppWindow(Frame):
 				if self.messageBatchSize > 1:
 					self.messageBatchSize = 1 if self.messageBatchSize < 4 else self.messageBatchSize // 2
 					status = 'processMessage, smaller messageBatchSize {}'.format(self.messageBatchSize)
-					if CAGSPC:
+					if dca.g['debug']:
 						print(status)
 					else:
 						debugLogger.debug(status)
 			else:
-				if CAGSPC:
+				if dca.g['debug']:
 					print(errmsg)
 					print_exc()
 					pdb.set_trace()
@@ -3549,7 +3617,7 @@ class AppWindow(Frame):
 				txt.config(state=DISABLED)		
 		except Exception as exc:
 			errmsg = 'Exception: {},  bodyText.index(END) "{}"'.format(exc, txt.index(END))
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -3661,7 +3729,7 @@ class AppWindow(Frame):
 				self.addWords(text, tag, maxWidth, emphasisRanges)
 		except Exception as exc:
 			errmsg = 'Exception: {}'.format(exc)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -3751,7 +3819,7 @@ class AppWindow(Frame):
 
 		except Exception as exc:
 			errmsg = 'Exception: {}'.format(exc)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -3917,7 +3985,7 @@ class AppWindow(Frame):
 				# with file versioning, we now only write when there has been changes
 				return
 			self.trimHistory()
-			hfile = open(nextVersion(BASE_FNAME, HIST_EXT, MAX_HIST_VERSION), 'wb')
+			hfile = open(nextVersion(HIST_BASE, HIST_EXT, MAX_HIST_VERSION), 'wb')
 			pickle_dump(curr, hfile, protocol=2)
 			hfile.close()
 		except Exception as exc:
@@ -3987,7 +4055,7 @@ class AppWindow(Frame):
 
 		except Exception as exc: ########
 			errmsg = 'Exception: {}'.format(exc)
-			if CAGSPC:
+			if dca.g['debug']:
 				print(errmsg)
 				print_exc()
 				pdb.set_trace()
@@ -4062,6 +4130,7 @@ class AppWindow(Frame):
 			opt['MsWheelHistory'] =  	cfg.getboolean('Settings','MsWheelHistory')
 			opt['PlistOverrides'] = 	cfg.getboolean('Settings','PlistOverrides')
 			self.maxBufferSize = 		cfg.getint('Settings','MaxBufferSize')
+			opt['DebugToggle'] =		cfg.getboolean('Settings','DebugToggle')
 
 			opt['Family'] =	font['Family'] = cfg.get('Font','Family')
 			opt['Size']   =	font['Size'] =   cfg.getint('Font','Size')
@@ -4081,9 +4150,9 @@ class AppWindow(Frame):
 					self.aliasesPolled[ key ] = self.defaultPolling(value)
 					opt['Aliases'][key] = self.aliasDefns[ key ] = value
 				else:
-					self.aliasesPolled[ key ] = polled.lower() != 'n'
+					self.aliasesPolled[ key ] = False if self.isAliasExec(value) else polled.lower() != 'n'
 					opt['Aliases'][key] = self.aliasDefns[ key ] = aliasDef
-				
+
 			self.loadedConfig = self.copyConfig()	# save copy to detect changes on Save Config Now
 
 		except Exception as exc:
@@ -4106,7 +4175,7 @@ class AppWindow(Frame):
 				#   still have to update that one option
 				writing = True
 				cfg = self.initCfgParser()
-				if cfg.get('Settings','AliasWindow') == DEFAULT_ALIAS_POSN:
+				if opt.get('AliasWindow', DEFAULT_ALIAS_POSN) == DEFAULT_ALIAS_POSN:
 					cfg.remove_option('Settings','AliasWindow') # don't save any until user has opened
 			else:
 				return
@@ -4126,6 +4195,7 @@ class AppWindow(Frame):
 				cfg.set('Settings', 'ResetCmdSizeOnRun', 'yes' if opt['ResetCmdSizeOnRun'] else 'no')
 				cfg.set('Settings', 'MsWheelHistory', 	 'yes' if opt['MsWheelHistory'] else 'no')
 				cfg.set('Settings', 'MaxBufferSize', 	 str(self.maxBufferSize))
+				cfg.set('Settings', 'DebugToggle', 	 	'yes' if opt['DebugToggle'] else 'no')
 
 				cfg.set('Font', 'Family', font['Family'])
 				cfg.set('Font', 'Size',   str(font['Size']))
@@ -4148,7 +4218,7 @@ class AppWindow(Frame):
 				cfg.set('Settings', 'SaveConfigOnExit', 'no')
 
 			if writing and (opt['SaveConfigNow'] or self.optionsChanged()):
-				fp = open(nextVersion(BASE_FNAME, CFG_EXT), 'w')
+				fp = open(nextVersion(CFG_BASE, CFG_EXT), 'w')
 				cfg.write(fp)
 				fp.close()
 				self.loadedConfig = self.copyConfig()	# record changes after successful write
@@ -4169,6 +4239,13 @@ class AppWindow(Frame):
 			if 'AliasWindow' not in orig: 			# not in config file
 				return True
 			if str(self.aliasWindow.mouseXY) != orig['AliasWindow']:
+				return True
+		col, font = self.COLORS, self.FONTS
+		for key, value in col.items():
+			if key in orig and orig[key] != value:
+				return True
+		for key, value in font.items():
+			if key in orig and orig[key] != value:
 				return True
 		for key, value in curr.items():
 			if key == 'SaveConfigNow': continue	# dummy option for making menu, never saved
@@ -4191,7 +4268,7 @@ def toggleDebugMsgs():
 		debugLogger.setLevel(DEBUG)
 
 def setTrace():
-	if CAGSPC:
+	if dca.g['debug']:
 		self = app
 		pdb.set_trace()
 
@@ -4250,7 +4327,7 @@ def nextVersion(fn, ext, max=None):
 def initLogger():
 	global consoleHandler, debugLogger
 	# set up logging to file
-	basicConfig(level=WARNING, filename=nextVersion(BASE_FNAME, LOG_EXT), filemode='w',
+	basicConfig(level=WARNING, filename=nextVersion(LOG_BASE, LOG_EXT), filemode='w',
 						format='%(asctime)s %(levelname)-8s %(message)s (%(filename)s: %(funcName)s, line %(lineno)s)')
 	if FROZEN or not sys.stdout.isatty():
 		consoleHandler = OoDebugConsoleHandler()	# handler for WARNING messages or higher to debug console
@@ -4267,12 +4344,12 @@ def initLogger():
 	debugLogger.logThreads = 0						#   "
 	debugLogger.logProcesses = 0					#   "
 	debugLogger.logMultiprocessing = 0				#   "
-	if not CAGSPC and (FROZEN or not sys.stdout.isatty()):
+	if not dca.g['debug'] and (FROZEN or not sys.stdout.isatty()):
 		debugLogger.write = debugLogger.debug		# consider all prints as debug information
 		debugLogger.flush = lambda: None			# this may be called when printing
 		sys.stdout = debugLogger
 		sys.stderr = debugLogger
-	elif CAGSPC:
+	elif dca.g['debug']:
 		debugLogger.setLevel(DEBUG) 
 
 app = None
@@ -4302,8 +4379,10 @@ def main():
 		app.colorPrint('') 				# add blank line after any error msg
 	try:
 		app.listener=reactor.listenTCP(TCP_Port, factory)
+		app.colorPrint("Oolite Debug Console (version " + __version__ + ")")
 		app.colorPrint("Use Up and Down arrows to scroll through the command history.")
 		app.colorPrint("Type /quit to quit.")
+		app.colorPrint("To (dis)re-connect a running Oolite: In-flight, pause and press 'c'.")
 		app.colorPrint("Waiting for connection...")
 	except Exception as exc:
 		debugLogger.exception(exc)
@@ -4316,7 +4395,7 @@ def main():
 		os.remove(LOGFILE)
 
 if __name__ == "__main__":
-	if not CAGSPC and (FROZEN or not sys.stdout.isatty()):
+	if not dca.g['debug'] and (FROZEN or not sys.stdout.isatty()):
 		try:
 			main()
 		except Exception as exc:
@@ -4324,8 +4403,3 @@ if __name__ == "__main__":
 			debugLogger.exception(errmsg)
 	else:
 		main()
-
-
-		
-		
-		
